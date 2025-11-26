@@ -1,27 +1,33 @@
-from aiogram import Router, types
-from rpc import rpc
-from keyboards.keyboards import back_button
+# handlers/analysis.py
+from aiogram import Router, types, F
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+from rpc import rpc, RPCError, RPCTransportError
+from keyboards.keyboards import back_button
 
 router = Router()
 
 
-# 1️⃣ Пользователь нажал "Анализ цели"
-@router.callback_query(lambda c: c.data == "menu_goal_analysis")
+@router.callback_query(F.data == "menu_goal_analysis")
 async def choose_goal_to_analyze(cb: types.CallbackQuery):
     user_id = cb.from_user.id
 
-    result = await rpc("goal.list", {"tg_user_id": user_id})
+    try:
+        res = await rpc("goal.list", {"tg_user_id": user_id})
+    except (RPCError, RPCTransportError):
+        await cb.message.edit_text(
+            "⚠️ Не удалось получить список целей.",
+            reply_markup=back_button()
+        )
+        return await cb.answer()
 
-    res = result.get("result")
-    if not res or not res.get("goals"):
+    goals = res.get("goals") or []
+    if not goals:
         await cb.message.edit_text(
             "⚠️ У тебя пока нет целей.",
             reply_markup=back_button()
         )
         return await cb.answer()
-
-    goals = res["goals"]
 
     kb = InlineKeyboardBuilder()
     for g in goals:
@@ -39,34 +45,45 @@ async def choose_goal_to_analyze(cb: types.CallbackQuery):
     await cb.answer()
 
 
-# 2️⃣ Пользователь нажал на конкретную цель
-@router.callback_query(lambda c: c.data.startswith("analyze_goal_"))
+@router.callback_query(F.data.startswith("analyze_goal_"))
 async def analyze_goal(cb: types.CallbackQuery):
     goal_id = int(cb.data.split("_")[-1])
     user_id = cb.from_user.id
 
     await cb.answer("⌛ Анализирую цель, подожди пару секунд...")
 
-    result = await rpc("ai.goal.analysis", {
-        "tg_user_id": user_id,
-        "goal_id": goal_id
-    })
-
-    if "error" in result:
+    try:
+        ai = await rpc("ai.goal.analysis", {
+            "tg_user_id": user_id,
+            "goal_id": goal_id
+        })
+    except RPCTransportError:
         await cb.message.edit_text(
-            f"⚠️ Ошибка анализа:\n{result['error']['message']}",
+            "⚠️ Сервер недоступен. Попробуй позже.",
+            reply_markup=back_button()
+        )
+        return
+    except RPCError as e:
+        await cb.message.edit_text(
+            f"⚠️ Ошибка анализа:\n{e}",
             reply_markup=back_button()
         )
         return
 
-    ai = result.get("result", {})
-
-    # Это то, что возвращает GoalService::goalAnalysis()
     summary = ai.get("summary", "Нет данных")
     recommendation = ai.get("recommendation", "Нет рекомендаций")
-    score = ai.get("numbers", {}).get("score", None)
+    numbers = ai.get("numbers", {}) or {}
+    score = numbers.get("score") or numbers.get("progress_percent")
 
-    score_text = f"⭐ Оценка прогресса: <b>{round(score * 100)}%</b>" if score else ""
+    if score is not None and score <= 1:
+        # если бекенд возвращает 0–1
+        score_value = round(score * 100)
+    elif score is not None:
+        score_value = round(score)
+    else:
+        score_value = None
+
+    score_text = f"⭐ Оценка прогресса: <b>{score_value}%</b>" if score_value is not None else ""
 
     text = (
         "🧠 <b>Анализ цели</b>\n\n"

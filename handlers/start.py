@@ -1,7 +1,9 @@
+# handlers/start.py
 from aiogram import Router, types
 from aiogram.filters import Command
+
 from keyboards.keyboards import main_menu
-from rpc import rpc
+from rpc import rpc, RPCError, RPCTransportError
 
 router = Router()
 
@@ -10,11 +12,17 @@ router = Router()
 async def cmd_start(message: types.Message):
     tg_id = message.from_user.id
 
-    # Регистрируем пользователя
-    await rpc("user.register", {
-        "tg_user_id": tg_id,
-        "name": message.from_user.full_name
-    })
+    try:
+        await rpc("user.register", {
+            "tg_user_id": tg_id,
+            "name": message.from_user.full_name
+        })
+    except (RPCError, RPCTransportError):
+        # юзера всё равно пустим в меню, но предупредим
+        await message.answer(
+            "⚠️ Не удалось связаться с сервером, но ты всё равно можешь открыть меню.\n"
+            "Попробуй команды чуть позже."
+        )
 
     text = (
         "Привет! 😊\n"

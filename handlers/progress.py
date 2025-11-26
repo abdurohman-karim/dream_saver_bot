@@ -1,21 +1,19 @@
-from aiogram import Router, types
-from rpc import rpc
+# handlers/progress.py
+from aiogram import Router, types, F
+
+from rpc import rpc, RPCError, RPCTransportError
 from keyboards.keyboards import back_button
 
 router = Router()
 
-@router.callback_query(lambda c: c.data == "menu_progress")
+
+@router.callback_query(F.data == "menu_progress")
 async def menu_progress(cb: types.CallbackQuery):
-    print("🔥 HANDLER menu_progress TRIGGERED")
-
     user_id = cb.from_user.id
-    print("Started progress")
 
-    result = await rpc("goal.list", {"tg_user_id": user_id})
-    print("RPC RESPONSE (goal.list):", result)
-
-    res = result.get("result")
-    if not res:
+    try:
+        res = await rpc("goal.list", {"tg_user_id": user_id})
+    except (RPCError, RPCTransportError):
         await cb.message.edit_text(
             "⚠️ Не удалось получить прогресс.\nПопробуй позже.",
             reply_markup=back_button()

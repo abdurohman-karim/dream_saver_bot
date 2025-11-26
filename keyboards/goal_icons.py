@@ -1,0 +1,14 @@
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+ICONS = [
+    "📱", "🚗", "🏠", "🎁",
+    "🎓", "🛋", "💻", "✈️",
+]
+
+def icons_keyboard():
+    kb = InlineKeyboardBuilder()
+    for icon in ICONS:
+        kb.button(text=icon, callback_data=f"goal_icon_{icon}")
+    kb.button(text="❌ Отменить", callback_data="menu_cancel")
+    kb.adjust(4, 1)
+    return kb.as_markup()

@@ -1,21 +1,30 @@
+# main.py
 import asyncio
+import logging
+
 from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
+
 from config import BOT_TOKEN
 from handlers.router import main_router
-from aiogram.client.default import DefaultBotProperties
 
 
 async def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
     bot = Bot(
         token=BOT_TOKEN,
-        default=DefaultBotProperties(parse_mode="HTML")
+        default=DefaultBotProperties(parse_mode="HTML"),
     )
     dp = Dispatcher()
+
     dp.include_router(main_router)
 
-    print("Bot started...")
+    logging.info("Bot starting...")
     await bot.delete_webhook(drop_pending_updates=True)
-
     await dp.start_polling(bot)
 
 
