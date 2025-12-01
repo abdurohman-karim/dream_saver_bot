@@ -2,25 +2,9 @@
 
 from aiogram import Router, types, F
 from rpc import rpc
-from aiogram.utils.keyboard import InlineKeyboardBuilder
+from keyboards.goals_manage import goals_list_keyboard, goal_manage_keyboard
 
 router = Router()
-
-
-def goals_list_keyboard(goals):
-    kb = InlineKeyboardBuilder()
-    for g in goals:
-        primary = "⭐" if g.get("is_primary") else ""
-        pr = g.get("priority", 1)
-        icon = g.get("icon", "🎯")
-
-        kb.button(
-            text=f"{icon} {g['title']} {primary} (P{pr})",
-            callback_data=f"goal_manage_{g['id']}"
-        )
-    kb.button(text="⬅️ Назад", callback_data="menu_back")
-    kb.adjust(1)
-    return kb.as_markup()
 
 
 @router.callback_query(F.data == "menu_goals")
@@ -28,14 +12,28 @@ async def menu_goals(cb: types.CallbackQuery):
     user_id = cb.from_user.id
 
     result = await rpc("goal.list", {"tg_user_id": user_id})
-    goals = result.get("result", {}).get("goals", [])
+
+    # Поддержка формата {jsonrpc, result: {...}} и прямого {...}
+    if "error" in result:
+        await cb.message.edit_text(
+            f"⚠️ Ошибка сервера при загрузке целей.",
+            reply_markup=goals_list_keyboard([])
+        )
+        return await cb.answer()
+
+    res = result.get("result") or result
+    goals = res.get("goals", [])
 
     if not goals:
+        from aiogram.utils.keyboard import InlineKeyboardBuilder
+        kb = InlineKeyboardBuilder()
+        kb.button(text="➕ Создать цель", callback_data="menu_newgoal")
+        kb.button(text="⬅️ Назад", callback_data="menu_back")
+        kb.adjust(1)
+
         await cb.message.edit_text(
-            "У тебя ещё нет целей.",
-            reply_markup=InlineKeyboardBuilder()
-                .button(text="⬅️ Назад", callback_data="menu_back")
-                .as_markup()
+            "У тебя ещё нет целей.\n\nНажми «Создать цель» в главном меню 🎯",
+            reply_markup=kb.as_markup()
         )
         return await cb.answer()
 
@@ -52,7 +50,8 @@ async def goal_manage(cb: types.CallbackQuery):
     user_id = cb.from_user.id
 
     result = await rpc("goal.get", {"tg_user_id": user_id, "goal_id": goal_id})
-    goal = result.get("result")
+    res = result.get("result") or result
+    goal = res
 
     icon = goal.get("icon", "🎯")
     title = goal["title"]

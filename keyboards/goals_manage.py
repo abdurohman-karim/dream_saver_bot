@@ -11,6 +11,7 @@ def goals_list_keyboard(goals):
             text=f"{icon} {g['title']} {primary} (P{pr})",
             callback_data=f"goal_manage_{g['id']}"
         )
+        kb.button(text="➕ Создать новый цель", callback_data="menu_newgoal")
 
     kb.button(text="⬅️ Назад", callback_data="menu_back")
     kb.adjust(1)

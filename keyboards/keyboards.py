@@ -2,7 +2,6 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 def main_menu():
     kb = InlineKeyboardBuilder()
-    kb.button(text="🎯 Создать цель", callback_data="menu_newgoal")
     kb.button(text="🎯 Мои цели", callback_data="menu_goals")
     kb.button(text="🤖 Smart Save", callback_data="menu_smart")
     kb.button(text="💡 Совет дня", callback_data="menu_daily")
