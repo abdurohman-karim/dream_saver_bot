@@ -5,12 +5,10 @@ from datetime import date
 
 from states.incomes import IncomeStates
 from rpc import rpc, RPCError, RPCTransportError
-from keyboards.keyboards import cancel_button, main_menu
+from keyboards.keyboards import cancel_button, main_menu, back_button
 
 router = Router()
 
-
-# --------------- КАТЕГОРИИ ДОХОДОВ ------------------
 INCOME_CATEGORIES = [
     ("💼 Зарплата", "inc_salary"),
     ("🏦 Перевод", "inc_transfer"),
@@ -41,20 +39,19 @@ def date_keyboard():
     return kb.as_markup()
 
 
-# --------------- 1. НАЖАЛИ «Добавить доход» ------------------
 @router.callback_query(F.data == "menu_add_income")
 async def add_income_start(cb: types.CallbackQuery, state: FSMContext):
     await state.set_state(IncomeStates.waiting_for_amount)
 
     await cb.message.edit_text(
-        "💵 <b>Добавление дохода</b>\n\n"
-        "Введите сумму:",
-        reply_markup=cancel_button()
+        "💵 <b>Добавляем доход</b>\n\n"
+        "Класс! Сколько ты сегодня заработал?\n"
+        "Введи сумму, и я сохраню её в твою финансовую ленту 😊\n\n"
+        "<i>Например:</i> <b>120000</b> или <b>1 500 000</b>",
+        reply_markup=back_button()
     )
     await cb.answer()
 
-
-# --------------- 2. ВВОД СУММЫ ------------------
 @router.message(IncomeStates.waiting_for_amount)
 async def income_amount(message: types.Message, state: FSMContext):
     amt = message.text.replace(" ", "")
@@ -70,7 +67,6 @@ async def income_amount(message: types.Message, state: FSMContext):
     )
 
 
-# --------------- 3. ВЫБОР КАТЕГОРИИ ------------------
 @router.callback_query(F.data.startswith("inc_"))
 async def set_income_category(cb: types.CallbackQuery, state: FSMContext):
     code = cb.data
@@ -89,7 +85,6 @@ async def set_income_category(cb: types.CallbackQuery, state: FSMContext):
     await cb.answer()
 
 
-# --------------- 4. ВВОД ОПИСАНИЯ ------------------
 @router.message(IncomeStates.waiting_for_description)
 async def income_description(message: types.Message, state: FSMContext):
     await state.update_data(description=message.text.strip())
@@ -102,13 +97,11 @@ async def income_description(message: types.Message, state: FSMContext):
     )
 
 
-# --------------- 5. СЕГОДНЯ ------------------
 @router.callback_query(F.data == "date_today_income")
 async def choose_today_income(cb: types.CallbackQuery, state: FSMContext):
     await save_income(cb, state, date.today().isoformat())
 
 
-# --------------- 6. РУЧНОЙ ВВОД ДАТЫ ------------------
 @router.callback_query(F.data == "date_manual_income")
 async def manual_date_income(cb: types.CallbackQuery, state: FSMContext):
     await state.set_state(IncomeStates.waiting_for_date)
@@ -125,7 +118,6 @@ async def manual_date_income_enter(message: types.Message, state: FSMContext):
     await save_income(message, state, message.text.strip())
 
 
-# --------------- 7. СОХРАНЕНИЕ ------------------
 async def save_income(msg_or_cb, state: FSMContext, date_value: str):
     data = await state.get_data()
 

@@ -4,6 +4,7 @@ from datetime import date
 
 from rpc import rpc, RPCError, RPCTransportError
 from keyboards.keyboards import back_button
+from keyboards.today_menu import today_menu
 
 router = Router()
 
@@ -20,13 +21,13 @@ async def show_today_transactions(cb: types.CallbackQuery):
     except RPCTransportError:
         await cb.message.edit_text(
             "⚠️ Сервер недоступен. Попробуй позже.",
-            reply_markup=back_button()
+            reply_markup=today_menu()
         )
         return await cb.answer()
     except RPCError as e:
         await cb.message.edit_text(
             f"⚠️ Ошибка запроса транзакций:\n{e}",
-            reply_markup=back_button()
+            reply_markup=today_menu()
         )
         return await cb.answer()
 
@@ -39,7 +40,7 @@ async def show_today_transactions(cb: types.CallbackQuery):
             f"💸 <b>Сегодня ({stats.get('date')}) у тебя нет зарегистрированных трат.</b>\n"
             "Можно отложить чуть больше в цель 😉"
         )
-        await cb.message.edit_text(text, reply_markup=back_button())
+        await cb.message.edit_text(text, reply_markup=today_menu())
         return await cb.answer()
 
     text = (
@@ -59,6 +60,6 @@ async def show_today_transactions(cb: types.CallbackQuery):
 
     await cb.message.edit_text(
         text,
-        reply_markup=back_button()
+        reply_markup=today_menu()
     )
     await cb.answer()

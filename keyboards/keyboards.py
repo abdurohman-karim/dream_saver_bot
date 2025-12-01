@@ -8,9 +8,8 @@ def main_menu():
     kb.button(text="📊 Прогресс", callback_data="menu_progress")
     kb.button(text="📅 Мой бюджет", callback_data="menu_budget")
     kb.button(text="💸 Сегодняшние траты", callback_data="menu_today")
-    kb.button(text="➕ Добавить трату", callback_data="menu_add_transaction")
-    kb.button(text="💵 Добавить доход", callback_data="menu_add_income")
-    kb.adjust(1)
+    kb.button(text="🗑 Очистить чат", callback_data="clear_chat")
+    kb.adjust(2, 2, 2, 2, 1)
     return kb.as_markup()
 
 def back_button():

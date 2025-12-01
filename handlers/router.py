@@ -12,6 +12,7 @@ from .budget import router as budget_router
 from .daily import router as daily_router
 from .add_transaction import router as add_tr_router
 from .add_income import router as add_income_router
+from .clear_chat import router as clear_chat_router
 
 from handlers.goals.goal_create import router as goals_create_router
 from handlers.goals.goal_manage import router as goals_manage_router
@@ -31,6 +32,7 @@ main_router.include_router(budget_router)
 main_router.include_router(daily_router)
 main_router.include_router(add_tr_router)
 main_router.include_router(add_income_router)
+main_router.include_router(clear_chat_router)
 
 # цели
 main_router.include_router(goals_create_router)

@@ -5,7 +5,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder  # <-- добавили
 from datetime import date
 
 from states.transactions import TransactionStates
-from keyboards.keyboards import cancel_button, main_menu
+from keyboards.keyboards import cancel_button, main_menu, back_button
 from keyboards.expense_categories import expense_category_keyboard, EXPENSE_CATEGORIES
 from rpc import rpc, RPCError, RPCTransportError
 
@@ -18,11 +18,12 @@ async def add_start(cb: types.CallbackQuery, state: FSMContext):
 
     await cb.message.edit_text(
         "💸 <b>Добавление расхода</b>\n\n"
-        "Введите сумму:",
-        reply_markup=cancel_button()
+        "Укажи сумму, которую ты потратил.\n"
+        "Я сохраню её в твою статистику и помогу точнее отслеживать бюджет 😉\n\n"
+        "Например: <b>12000</b> или <b>450 000</b>",
+        reply_markup=back_button()
     )
     await cb.answer()
-
 
 @router.message(TransactionStates.waiting_for_amount)
 async def set_amount(message: types.Message, state: FSMContext):
@@ -53,7 +54,7 @@ async def set_category(cb: types.CallbackQuery, state: FSMContext):
 
     await cb.message.edit_text(
         "📝 <b>Введите описание (необязательно):</b>",
-        reply_markup=cancel_button()
+        reply_markup=back_button()
     )
     await cb.answer()
 
