@@ -4,4 +4,6 @@ class TransactionStates(StatesGroup):
     waiting_for_amount = State()
     waiting_for_category = State()
     waiting_for_description = State()
-    waiting_for_date = State()
+
+    waiting_for_date = State()           # выбор "Сегодня / Вручную"
+    waiting_for_date_manual = State()    # Ввод даты вручную
