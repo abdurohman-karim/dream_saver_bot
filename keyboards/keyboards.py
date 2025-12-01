@@ -6,7 +6,6 @@ def main_menu():
     kb.button(text="🤖 Smart Save", callback_data="menu_smart")
     kb.button(text="💡 Совет дня", callback_data="menu_daily")
     kb.button(text="📊 Прогресс", callback_data="menu_progress")
-    kb.button(text="🧠 Анализ цели", callback_data="menu_goal_analysis")
     kb.button(text="📅 Мой бюджет", callback_data="menu_budget")
     kb.button(text="💸 Сегодняшние траты", callback_data="menu_today")
     kb.button(text="➕ Добавить трату", callback_data="menu_add_transaction")

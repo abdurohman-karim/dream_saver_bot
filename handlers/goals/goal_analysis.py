@@ -1,4 +1,4 @@
-# handlers/analysis.py
+
 from aiogram import Router, types, F
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -6,44 +6,6 @@ from rpc import rpc, RPCError, RPCTransportError
 from keyboards.keyboards import back_button
 
 router = Router()
-
-
-@router.callback_query(F.data == "menu_goal_analysis")
-async def choose_goal_to_analyze(cb: types.CallbackQuery):
-    user_id = cb.from_user.id
-
-    try:
-        res = await rpc("goal.list", {"tg_user_id": user_id})
-    except (RPCError, RPCTransportError):
-        await cb.message.edit_text(
-            "⚠️ Не удалось получить список целей.",
-            reply_markup=back_button()
-        )
-        return await cb.answer()
-
-    goals = res.get("goals") or []
-    if not goals:
-        await cb.message.edit_text(
-            "⚠️ У тебя пока нет целей.",
-            reply_markup=back_button()
-        )
-        return await cb.answer()
-
-    kb = InlineKeyboardBuilder()
-    for g in goals:
-        kb.button(
-            text=f"{g['title']}",
-            callback_data=f"analyze_goal_{g['id']}"
-        )
-    kb.button(text="⬅️ Назад", callback_data="menu_back")
-    kb.adjust(1)
-
-    await cb.message.edit_text(
-        "Выбери цель, которую нужно проанализировать 👇",
-        reply_markup=kb.as_markup()
-    )
-    await cb.answer()
-
 
 @router.callback_query(F.data.startswith("analyze_goal_"))
 async def analyze_goal(cb: types.CallbackQuery):

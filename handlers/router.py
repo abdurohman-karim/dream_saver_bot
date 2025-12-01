@@ -7,14 +7,14 @@ from .smart import router as smart_router
 from .ai import router as ai_router
 from .progress import router as progress_router
 from .navigation import router as navigation_router
-from .analysis import router as analysis_router
+from handlers.goals.goal_analysis import router as analysis_router
 from .budget import router as budget_router
 from .daily import router as daily_router
 from .add_transaction import router as add_tr_router
 from .add_income import router as add_income_router
 
-from .goals_create import router as goals_create_router
-from .goals_manage import router as goals_manage_router
+from handlers.goals.goal_create import router as goals_create_router
+from handlers.goals.goal_manage import router as goals_manage_router
 
 logging.basicConfig(level=logging.INFO)
 

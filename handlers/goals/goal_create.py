@@ -1,4 +1,4 @@
-# handlers/goals_create.py
+# handlers/goal_create.py
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 
@@ -8,7 +8,6 @@ from keyboards.keyboards import cancel_button, main_menu
 from keyboards.goal_icons import icons_keyboard
 
 router = Router()
-
 
 @router.callback_query(F.data == "menu_newgoal")
 async def new_goal_start(cb: types.CallbackQuery, state: FSMContext):
@@ -47,6 +46,7 @@ async def set_title(message: types.Message, state: FSMContext):
 
     await state.update_data(bot_message_id=sent.message_id)
     await state.set_state(GoalStates.waiting_for_amount)
+    return None
 
 
 @router.message(GoalStates.waiting_for_amount)
@@ -76,6 +76,7 @@ async def set_amount(message: types.Message, state: FSMContext):
 
     await state.update_data(bot_message_id=sent.message_id)
     await state.set_state(GoalStates.waiting_for_icon)
+    return None
 
 
 @router.callback_query(F.data.startswith("goal_icon_"))

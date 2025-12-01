@@ -11,8 +11,8 @@ def goals_list_keyboard(goals):
             text=f"{icon} {g['title']} {primary} (P{pr})",
             callback_data=f"goal_manage_{g['id']}"
         )
-        kb.button(text="➕ Создать новый цель", callback_data="menu_newgoal")
 
+    kb.button(text="➕ Создать новый цель", callback_data="menu_newgoal")
     kb.button(text="⬅️ Назад", callback_data="menu_back")
     kb.adjust(1)
     return kb.as_markup()
@@ -55,7 +55,7 @@ def goal_manage_keyboard(goal_id, is_primary, status):
             callback_data=f"goal_reopen_{goal_id}"
         )
 
-    kb.button(text="🧠 Анализ цели", callback_data=f"goal_ai_{goal_id}")
+    kb.button(text="🧠 Анализ цели", callback_data=f"analyze_goal_{goal_id}")
     kb.button(text="⬅️ Назад", callback_data="menu_goals")
     kb.adjust(1)
 
