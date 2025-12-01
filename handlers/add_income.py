@@ -1,11 +1,12 @@
+# handlers/add_income.py
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from datetime import date
 
 from states.incomes import IncomeStates
-from rpc import rpc, RPCError, RPCTransportError
 from keyboards.keyboards import cancel_button, main_menu, back_button
+from rpc import rpc, RPCError, RPCTransportError
 
 router = Router()
 
@@ -22,38 +23,72 @@ def income_category_keyboard():
     kb = InlineKeyboardBuilder()
     for text, code in INCOME_CATEGORIES:
         kb.button(text=text, callback_data=code)
-    kb.button(text="⬅ Назад", callback_data="add_income_back")
     kb.button(text="❌ Отменить", callback_data="menu_cancel")
     kb.adjust(2)
     return kb.as_markup()
 
 
-# --------------- ВЫБОР ДАТЫ ------------------
+def description_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text="⏭ Пропустить", callback_data="inc_desc_skip")
+    kb.button(text="❌ Отменить", callback_data="menu_cancel")
+    kb.adjust(2)
+    return kb.as_markup()
+
+
 def date_keyboard():
     kb = InlineKeyboardBuilder()
-    kb.button(text="📅 Сегодня", callback_data="date_today_income")
-    kb.button(text="🗓 Ввести вручную", callback_data="date_manual_income")
-    kb.button(text="⬅ Назад", callback_data="add_income_back_desc")
+    kb.button(text="📅 Сегодня", callback_data="inc_date_today")
+    kb.button(text="🗓 Ввести вручную", callback_data="inc_date_manual")
     kb.button(text="❌ Отменить", callback_data="menu_cancel")
     kb.adjust(1)
     return kb.as_markup()
+
+
+async def safe_delete(msg: types.Message):
+    try:
+        await msg.delete()
+    except:
+        pass
+
+
+async def update_window(obj, message_id: int, text: str, reply_markup=None):
+    if isinstance(obj, types.CallbackQuery):
+        bot = obj.bot
+        chat_id = obj.message.chat.id
+    else:
+        bot = obj.bot
+        chat_id = obj.chat.id
+
+    await bot.edit_message_text(
+        chat_id=chat_id,
+        message_id=message_id,
+        text=text,
+        reply_markup=reply_markup
+    )
+
 
 
 @router.callback_query(F.data == "menu_add_income")
 async def add_income_start(cb: types.CallbackQuery, state: FSMContext):
     await state.set_state(IncomeStates.waiting_for_amount)
 
-    await cb.message.edit_text(
-        "💵 <b>Добавляем доход</b>\n\n"
-        "Класс! Сколько ты сегодня заработал?\n"
-        "Введи сумму, и я сохраню её в твою финансовую ленту 😊\n\n"
+    msg = await cb.message.edit_text(
+        "💵 <b>Добавление дохода</b>\n\n"
+        "Сколько ты получил?\n"
+        "Укажи сумму, и я внесу её в твой финансовый журнал 😊\n\n"
         "<i>Например:</i> <b>120000</b> или <b>1 500 000</b>",
         reply_markup=back_button()
     )
+
+    await state.update_data(bot_message_id=msg.message_id)
     await cb.answer()
+
 
 @router.message(IncomeStates.waiting_for_amount)
 async def income_amount(message: types.Message, state: FSMContext):
+    await safe_delete(message)
+
     amt = message.text.replace(" ", "")
     if not amt.isdigit():
         return await message.answer("⚠ Введите сумму числом.")
@@ -61,95 +96,136 @@ async def income_amount(message: types.Message, state: FSMContext):
     await state.update_data(amount=int(amt))
     await state.set_state(IncomeStates.waiting_for_category)
 
-    await message.answer(
+    data = await state.get_data()
+    bot_message_id = data["bot_message_id"]
+
+    await update_window(
+        message,
+        bot_message_id,
         "🏦 <b>Выберите источник дохода:</b>",
-        reply_markup=income_category_keyboard()
+        income_category_keyboard()
     )
 
 
-@router.callback_query(F.data.startswith("inc_"))
+@router.callback_query(F.data.in_([code for _, code in INCOME_CATEGORIES]))
 async def set_income_category(cb: types.CallbackQuery, state: FSMContext):
     code = cb.data
-
-    text = next((t for t, c in INCOME_CATEGORIES if c == code), None)
-    if not text:
+    category = next((t for t, c in INCOME_CATEGORIES if c == code), None)
+    if not category:
         return await cb.answer("Ошибка категории")
 
-    await state.update_data(category=text)
+    await state.update_data(category=category)
     await state.set_state(IncomeStates.waiting_for_description)
 
-    await cb.message.edit_text(
+    data = await state.get_data()
+    bot_message_id = data["bot_message_id"]
+
+    await update_window(
+        cb,
+        bot_message_id,
         "📝 <b>Введите описание (необязательно):</b>",
-        reply_markup=cancel_button()
+        description_keyboard()
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data == "inc_desc_skip")
+async def skip_income_description(cb: types.CallbackQuery, state: FSMContext):
+    await state.update_data(description=None)
+    await state.set_state(IncomeStates.waiting_for_date)
+
+    data = await state.get_data()
+    bot_message_id = data["bot_message_id"]
+
+    await update_window(
+        cb,
+        bot_message_id,
+        "📅 <b>Дата дохода:</b>\n\nВыберите вариант:",
+        date_keyboard()
     )
     await cb.answer()
 
 
 @router.message(IncomeStates.waiting_for_description)
 async def income_description(message: types.Message, state: FSMContext):
+    await safe_delete(message)
+
     await state.update_data(description=message.text.strip())
     await state.set_state(IncomeStates.waiting_for_date)
 
-    await message.answer(
-        "📅 <b>Дата дохода:</b>\n\n"
-        "Выберите один вариант:",
-        reply_markup=date_keyboard()
+    data = await state.get_data()
+    bot_message_id = data["bot_message_id"]
+
+    await update_window(
+        message,
+        bot_message_id,
+        "📅 <b>Дата дохода:</b>\n\nВыберите один вариант:",
+        date_keyboard()
     )
 
 
-@router.callback_query(F.data == "date_today_income")
+@router.callback_query(F.data == "inc_date_today")
 async def choose_today_income(cb: types.CallbackQuery, state: FSMContext):
-    await save_income(cb, state, date.today().isoformat())
+    await finish_income(cb, state, date.today().isoformat())
 
 
-@router.callback_query(F.data == "date_manual_income")
+@router.callback_query(F.data == "inc_date_manual")
 async def manual_date_income(cb: types.CallbackQuery, state: FSMContext):
     await state.set_state(IncomeStates.waiting_for_date)
 
-    await cb.message.edit_text(
+    data = await state.get_data()
+    bot_message_id = data["bot_message_id"]
+
+    await update_window(
+        cb,
+        bot_message_id,
         "📆 <b>Введите дату (YYYY-MM-DD):</b>",
-        reply_markup=cancel_button()
+        cancel_button()
     )
     await cb.answer()
 
 
 @router.message(IncomeStates.waiting_for_date)
 async def manual_date_income_enter(message: types.Message, state: FSMContext):
-    await save_income(message, state, message.text.strip())
+    await finish_income(message, state, message.text.strip())
 
 
-async def save_income(msg_or_cb, state: FSMContext, date_value: str):
+
+async def finish_income(obj, state: FSMContext, date_value: str):
     data = await state.get_data()
 
     payload = {
-        "tg_user_id": msg_or_cb.from_user.id,
-        "items": [
-            {
-                "amount": abs(data["amount"]),  # доход = положительное число
-                "category": data["category"],
-                "description": data.get("description"),
-                "datetime": date_value,
-            }
-        ],
+        "tg_user_id": obj.from_user.id,
+        "items": [{
+            "amount": abs(data["amount"]),
+            "category": data["category"],
+            "description": data.get("description"),
+            "datetime": date_value,
+        }],
         "source": "manual",
     }
 
     try:
         await rpc("transaction.import", payload)
-    except (RPCError, RPCTransportError) as e:
-        await msg_or_cb.message.edit_text(
-            f"⚠ Ошибка при сохранении:\n{e}",
-            reply_markup=main_menu()
+    except Exception as e:
+        return await update_window(
+            obj,
+            data["bot_message_id"],
+            f"❌ Ошибка при сохранении:\n{e}",
+            main_menu()
         )
-        await state.clear()
-        return
 
+    bot_message_id = data["bot_message_id"]
     await state.clear()
 
-    await msg_or_cb.message.edit_text(
-        "✅ <b>Доход сохранён!</b>\n\n"
-        f"💵 Сумма: <b>{data['amount']:,} сум</b>\n"
-        f"🏦 Источник: <b>{data['category']}</b>\n"
-        f"📅 Дата: <b>{date_value}</b>",
-        reply_markup=main_menu()
+    await update_window(
+        obj,
+        bot_message_id,
+        (
+            "✅ <b>Доход сохранён!</b>\n\n"
+            f"💵 Сумма: <b>{data['amount']:,} сум</b>\n"
+            f"🏦 Источник: <b>{data['category']}</b>\n"
+            f"📅 Дата: <b>{date_value}</b>"
+        ),
+        main_menu()
     )
