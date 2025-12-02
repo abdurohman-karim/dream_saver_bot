@@ -3,7 +3,6 @@ from aiogram import Router, types, F
 from datetime import date
 
 from rpc import rpc, RPCError, RPCTransportError
-from keyboards.keyboards import back_button
 from keyboards.today_menu import today_menu
 
 router = Router()
