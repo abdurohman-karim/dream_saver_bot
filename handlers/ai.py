@@ -2,6 +2,8 @@
 from aiogram import Router, types, F
 
 from rpc import rpc, RPCError, RPCTransportError
+from keyboards.keyboards import back_button
+from ui.formatting import header
 
 router = Router()
 
@@ -13,17 +15,27 @@ async def ai_daily(cb: types.CallbackQuery):
             "tg_user_id": cb.from_user.id
         })
     except RPCTransportError:
-        await cb.message.answer("⚠️ Сервер недоступен. Попробуй позже.")
+        await cb.message.edit_text(
+            "⚠️ Сервис недоступен. Попробуй позже.",
+            reply_markup=back_button()
+        )
         return await cb.answer()
-    except RPCError as e:
-        await cb.message.answer(f"⚠️ Ошибка AI:\n{e}")
+    except RPCError:
+        await cb.message.edit_text(
+            "⚠️ Не удалось получить совет. Попробуй позже.",
+            reply_markup=back_button()
+        )
         return await cb.answer()
 
     insight = res.get("insight")
     if not insight:
-        await cb.message.answer("⚠️ Ошибка AI: сервер не вернул insight.")
+        await cb.message.edit_text(
+            "⚠️ Совет временно недоступен. Попробуй позже.",
+            reply_markup=back_button()
+        )
         return await cb.answer()
 
-    text = f"💡 Совет от ИИ:\n\n{insight}"
-    await cb.message.answer(text)
+    text = header("Совет дня", "tip") + "\n\n" + insight
+    await cb.message.edit_text(text, reply_markup=back_button())
     await cb.answer()
+    return None

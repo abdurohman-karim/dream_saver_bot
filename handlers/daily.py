@@ -4,6 +4,8 @@ from datetime import date
 
 from rpc import rpc, RPCError, RPCTransportError
 from keyboards.today_menu import today_menu
+from utils.ui import format_amount, format_date, format_datetime, clean_text
+from ui.formatting import header, money_line, SEPARATOR
 
 router = Router()
 
@@ -19,13 +21,13 @@ async def show_today_transactions(cb: types.CallbackQuery):
         })
     except RPCTransportError:
         await cb.message.edit_text(
-            "⚠️ Сервер недоступен. Попробуй позже.",
+            "⚠️ Сервис недоступен. Попробуй позже.",
             reply_markup=today_menu()
         )
         return await cb.answer()
-    except RPCError as e:
+    except RPCError:
         await cb.message.edit_text(
-            f"⚠️ Ошибка запроса транзакций:\n{e}",
+            "⚠️ Не удалось получить операции. Попробуй позже.",
             reply_markup=today_menu()
         )
         return await cb.answer()
@@ -36,26 +38,40 @@ async def show_today_transactions(cb: types.CallbackQuery):
 
     if not items:
         text = (
-            f"💸 <b>Сегодня ({stats.get('date')}) у тебя нет зарегистрированных трат.</b>\n"
-            "Можно отложить чуть больше в цель 😉"
+            header("Сегодня", "insights")
+            + "\n\n"
+            + f"Дата: <b>{format_date(stats.get('date'))}</b>\n"
+            + "Пока нет операций за сегодня.\n"
+            + "Добавим первую запись, чтобы видеть динамику."
         )
         await cb.message.edit_text(text, reply_markup=today_menu())
         return await cb.answer()
 
+    balance = income - expense
     text = (
-        f"💸 <b>Траты за {stats.get('date')}:</b>\n\n"
-        f"➕ Доход: <b>{income:,.0f} сум</b>\n"
-        f"➖ Расход: <b>{expense:,.0f} сум</b>\n\n"
-        "Список операций:\n"
+        header("Сегодня", "insights")
+        + "\n\n"
+        + f"Дата: <b>{format_date(stats.get('date'))}</b>\n"
+        + money_line("Доход", income, "income", sign="+") + "\n"
+        + money_line("Расход", expense, "expense", sign="-") + "\n"
+        + SEPARATOR + "\n"
+        + money_line("Баланс", balance, "progress") + "\n\n"
+        + "Операции:\n"
     )
 
     for t in items:
         amount = float(t["amount"])
         sign = "➕" if amount > 0 else "➖"
         cat = t.get("category") or "Без категории"
-        desc = t.get("description") or ""
-        dt = t.get("datetime") or ""
-        text += f"{sign} <b>{amount:,.0f}</b> — {cat} ({dt}) {desc}\n"
+        desc = clean_text(t.get("description") or "", 60)
+        dt = format_datetime(t.get("datetime") or "")
+        amount_text = format_amount(abs(amount))
+        line = f"{sign} <b>{amount_text}</b> — {cat}"
+        if dt:
+            line += f" · {dt}"
+        if desc:
+            line += f" · {desc}"
+        text += line + "\n"
 
     await cb.message.edit_text(
         text,

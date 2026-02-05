@@ -1,5 +1,5 @@
 from aiogram import Router, types, F
-from keyboards.keyboards import main_menu
+from ui.menus import get_main_menu
 
 router = Router()
 
@@ -17,10 +17,10 @@ async def clear_chat(cb: types.CallbackQuery):
 
     # 2. Отправляем новое "главное окно"
     await cb.message.answer(
-        "🗑 <b>Чат очищен!</b>\n\n"
+        "🗑 <b>Чат очищен</b>\n\n"
         "Telegram не позволяет удалять сообщения пользователя,\n"
         "поэтому очищены только сообщения бота.",
-        reply_markup=main_menu()
+        reply_markup=await get_main_menu(cb.from_user.id)
     )
 
     await cb.answer()

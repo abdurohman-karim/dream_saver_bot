@@ -7,3 +7,4 @@ class TransactionStates(StatesGroup):
 
     waiting_for_date = State()
     waiting_for_date_manual = State()
+    waiting_for_confirm = State()

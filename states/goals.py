@@ -10,3 +10,4 @@ class GoalStates(StatesGroup):
 
 class DepositGoal(StatesGroup):
     waiting_for_amount = State()
+    waiting_for_confirm = State()

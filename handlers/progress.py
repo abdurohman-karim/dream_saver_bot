@@ -3,6 +3,8 @@ from aiogram import Router, types, F
 
 from rpc import rpc, RPCError, RPCTransportError
 from keyboards.keyboards import back_button
+from utils.ui import format_amount
+from ui.formatting import header, SEPARATOR
 
 router = Router()
 
@@ -23,12 +25,12 @@ async def menu_progress(cb: types.CallbackQuery):
     goals = res.get("goals", [])
     if not goals:
         await cb.message.edit_text(
-            "📊 У тебя пока нет целей.\nСоздай первую 🎯",
+            "📊 Пока нет целей.\nСоздай первую — и начнем отслеживать прогресс.",
             reply_markup=back_button()
         )
         return await cb.answer()
 
-    text = "📊 <b>Твой прогресс по целям:</b>\n\n"
+    text = header("Прогресс по целям", "insights") + "\n\n"
 
     for g in goals:
         total = float(g.get("amount_total", 0) or 0)
@@ -37,9 +39,9 @@ async def menu_progress(cb: types.CallbackQuery):
 
         text += (
             f"🎯 <b>{g['title']}</b>\n"
-            f"💰 Накоплено: <b>{saved:,.0f}</b> / {total:,.0f}\n"
+            f"💰 Накоплено: <b>{format_amount(saved)}</b> / {format_amount(total)}\n"
             f"📈 Прогресс: <b>{percent}%</b>\n"
-            "──────────────\n"
+            f"{SEPARATOR}\n"
         )
 
     await cb.message.edit_text(

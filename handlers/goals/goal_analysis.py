@@ -7,12 +7,19 @@ from keyboards.keyboards import back_button
 
 router = Router()
 
+
+def back_to_goal_keyboard(goal_id: int):
+    kb = InlineKeyboardBuilder()
+    kb.button(text="⬅️ Назад", callback_data=f"goal_manage_{goal_id}")
+    kb.adjust(1)
+    return kb.as_markup()
+
 @router.callback_query(F.data.startswith("analyze_goal_"))
 async def analyze_goal(cb: types.CallbackQuery):
     goal_id = int(cb.data.split("_")[-1])
     user_id = cb.from_user.id
 
-    await cb.answer("⌛ Анализирую цель, подожди пару секунд...")
+    await cb.answer("⌛ Анализирую цель...")
 
     try:
         ai = await rpc("ai.goal.analysis", {
@@ -21,13 +28,13 @@ async def analyze_goal(cb: types.CallbackQuery):
         })
     except RPCTransportError:
         await cb.message.edit_text(
-            "⚠️ Сервер недоступен. Попробуй позже.",
+            "⚠️ Сервис недоступен. Попробуй позже.",
             reply_markup=back_button()
         )
         return
-    except RPCError as e:
+    except RPCError:
         await cb.message.edit_text(
-            f"⚠️ Ошибка анализа:\n{e}",
+            "⚠️ Не удалось выполнить анализ. Попробуй позже.",
             reply_markup=back_button()
         )
         return
@@ -54,7 +61,4 @@ async def analyze_goal(cb: types.CallbackQuery):
         f"{score_text}"
     )
 
-    await cb.message.edit_text(
-        text,
-        reply_markup=back_button()
-    )
+    await cb.message.edit_text(text, reply_markup=back_to_goal_keyboard(goal_id))

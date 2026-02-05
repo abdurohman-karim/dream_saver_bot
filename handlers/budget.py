@@ -4,6 +4,7 @@ from datetime import date
 
 from rpc import rpc, RPCError, RPCTransportError
 from keyboards.keyboards import back_button
+from ui.formatting import header, money_line
 
 router = Router()
 
@@ -21,13 +22,13 @@ async def show_budget(cb: types.CallbackQuery):
         })
     except RPCTransportError:
         await cb.message.edit_text(
-            "⚠️ Сервер недоступен. Попробуй позже.",
+            "⚠️ Сервис недоступен. Попробуй позже.",
             reply_markup=back_button()
         )
         return await cb.answer()
-    except RPCError as e:
+    except RPCError:
         await cb.message.edit_text(
-            f"⚠️ Ошибка при получении бюджета:\n{e}",
+            "⚠️ Не удалось получить бюджет. Попробуй позже.",
             reply_markup=back_button()
         )
         return await cb.answer()
@@ -37,10 +38,15 @@ async def show_budget(cb: types.CallbackQuery):
     daily_limit = float(budget.get("recommended_daily_limit", 0))
 
     text = (
-        f"📅 <b>Бюджет за {budget.get('month')}</b>\n\n"
-        f"💸 Доходы: <b>{income:,.0f} сум</b>\n"
-        f"💰 Расходы: <b>{expenses:,.0f} сум</b>\n"
-        f"📉 Рекомендуемый дневной лимит: <b>{daily_limit:,.0f} сум</b>\n"
+        header(f"Бюджет · {budget.get('month')}", "budget")
+        + "\n\n"
+        + money_line("Доходы", income, "income")
+        + "\n"
+        + money_line("Расходы", expenses, "expense")
+        + "\n"
+        + money_line("Дневной лимит", daily_limit, "progress")
+        + "\n\n"
+        + "Это ориентир, чтобы тратить спокойно и без стресса."
     )
 
     await cb.message.edit_text(

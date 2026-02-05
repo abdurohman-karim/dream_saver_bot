@@ -5,9 +5,11 @@ from aiogram.fsm.context import FSMContext
 from datetime import datetime
 
 from states.goals import GoalStates
-from keyboards.keyboards import cancel_button, main_menu
+from keyboards.keyboards import cancel_button
 from keyboards.deadline import deadline_keyboard
 from rpc import rpc, RPCError, RPCTransportError
+from utils.ui import parse_amount, format_amount, format_date
+from ui.menus import get_main_menu
 
 router = Router()
 
@@ -26,15 +28,15 @@ async def render_create_window(cb_or_msg, state: FSMContext):
     deadline = data.get("deadline", "—")
 
     if isinstance(amount, int):
-        amount_fmt = f"{amount:,}".replace(",", " ")
+        amount_fmt = format_amount(amount)
     else:
         amount_fmt = amount
 
     text = (
         "🎯 <b>Создание новой цели</b>\n\n"
         f"🏷 Название: <b>{title}</b>\n"
-        f"💰 Сумма: <b>{amount_fmt} сум</b>\n"
-        f"📅 Дедлайн: <b>{deadline}</b>"
+        f"💰 Сумма: <b>{amount_fmt}</b>\n"
+        f"📅 Дедлайн: <b>{format_date(deadline) if deadline else '—'}</b>"
     )
 
     bot_msg_id = data["bot_message_id"]
@@ -59,36 +61,37 @@ async def finish_goal_create(cb_or_msg, state: FSMContext):
 
     try:
         await rpc("goal.create", payload)
-    except (RPCTransportError, RPCError) as e:
+    except (RPCTransportError, RPCError):
         if isinstance(cb_or_msg, types.CallbackQuery):
             await cb_or_msg.message.answer(
-                f"⚠️ Ошибка:\n{e}",
-                reply_markup=main_menu()
+                "⚠️ Не удалось создать цель. Попробуй позже.",
+                reply_markup=await get_main_menu(cb_or_msg.from_user.id)
             )
         else:
             await cb_or_msg.answer(
-                f"⚠️ Ошибка:\n{e}",
-                reply_markup=main_menu()
+                "⚠️ Не удалось создать цель. Попробуй позже.",
+                reply_markup=await get_main_menu(cb_or_msg.from_user.id)
             )
         await state.clear()
         return
 
     await state.clear()
 
-    amount_fmt = f"{data['amount_total']:,}".replace(",", " ")
+    amount_fmt = format_amount(data["amount_total"])
 
     text = (
-        f"🎉 <b>Цель создана!</b>\n\n"
+        f"🎯 <b>Цель создана</b>\n\n"
         f"🏷 Название: <b>{data['title']}</b>\n"
-        f"💰 Сумма: <b>{amount_fmt} сум</b>\n"
-        f"📅 Дедлайн: <b>{data['deadline']}</b>"
+        f"💰 Сумма: <b>{amount_fmt}</b>\n"
+        f"📅 Дедлайн: <b>{format_date(data.get('deadline'))}</b>\n"
+        "Хорошее решение. Будем двигаться к цели спокойно и системно."
     )
 
     # ←←← главный фикс
     if isinstance(cb_or_msg, types.CallbackQuery):
-        await cb_or_msg.message.answer(text, reply_markup=main_menu())
+        await cb_or_msg.message.answer(text, reply_markup=await get_main_menu(cb_or_msg.from_user.id))
     else:
-        await cb_or_msg.answer(text, reply_markup=main_menu())
+        await cb_or_msg.answer(text, reply_markup=await get_main_menu(cb_or_msg.from_user.id))
 
 
 @router.callback_query(F.data == "menu_newgoal")
@@ -97,7 +100,7 @@ async def new_goal_start(cb: types.CallbackQuery, state: FSMContext):
 
     sent = await cb.message.edit_text(
         "🎯 <b>Создание новой цели</b>\n\n"
-        "Введите название цели:",
+        "Как назовем цель?",
         reply_markup=cancel_button()
     )
 
@@ -111,7 +114,7 @@ async def set_title(message: types.Message, state: FSMContext):
     title = message.text.strip()
     if len(title) < 2:
         await safe_delete(message)
-        return await message.answer("⚠️ Название слишком короткое")
+        return await message.answer("⚠️ Название слишком короткое. Сделаем его чуть подробнее?")
 
     await state.update_data(title=title)
     await safe_delete(message)
@@ -124,14 +127,11 @@ async def set_title(message: types.Message, state: FSMContext):
 
 @router.message(GoalStates.waiting_for_amount)
 async def set_amount(message: types.Message, state: FSMContext):
-    raw = message.text.replace(" ", "")
-
-    if not raw.isdigit():
+    amount = parse_amount(message.text)
+    if amount is None:
         await safe_delete(message)
-        return await message.answer("⚠️ Введите сумму числом")
-
-    amount = int(raw)
-    await state.update_data(amount_total=amount)
+        return await message.answer("⚠️ Введите сумму числом, например: <b>500000</b>")
+    await state.update_data(amount_total=int(amount))
     await safe_delete(message)
 
     await state.set_state(GoalStates.waiting_for_deadline)
@@ -193,5 +193,3 @@ async def manual_deadline_input(message: types.Message, state: FSMContext):
     await state.update_data(deadline=str(deadline))
 
     return await finish_goal_create(message, state)
-
-

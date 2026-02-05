@@ -1,12 +1,14 @@
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from datetime import date
+from datetime import date, datetime
 
 from states.transactions import TransactionStates
-from keyboards.keyboards import cancel_button, main_menu, back_button
+from keyboards.keyboards import cancel_button, back_button
 from keyboards.expense_categories import expense_category_keyboard, EXPENSE_CATEGORIES
-from rpc import rpc, RPCError, RPCTransportError
+from rpc import rpc
+from ui.menus import get_main_menu
+from utils.ui import parse_amount, format_amount, format_date, clean_text
 
 router = Router()
 
@@ -23,10 +25,9 @@ async def add_start(cb: types.CallbackQuery, state: FSMContext):
     await state.set_state(TransactionStates.waiting_for_amount)
 
     msg = await cb.message.edit_text(
-        "💸 <b>Добавление расхода</b>\n\n"
-        "Укажи сумму, которую ты потратил.\n"
-        "Я сохраню её в твою статистику и помогу точнее отслеживать бюджет 😉\n\n"
-        "Например: <b>12000</b> или <b>450 000</b>",
+        "💸 <b>Новый расход</b>\n\n"
+        "Укажи сумму траты.\n"
+        "Пример: <b>12000</b> или <b>450 000</b>",
         reply_markup=back_button()
     )
 
@@ -38,11 +39,11 @@ async def add_start(cb: types.CallbackQuery, state: FSMContext):
 async def set_amount(message: types.Message, state: FSMContext):
     await safe_delete(message)
 
-    raw = message.text.replace(" ", "")
-    if not raw.isdigit():
-        return await message.answer("⚠ Введите сумму числом.")
+    amount = parse_amount(message.text)
+    if amount is None:
+        return await message.answer("⚠️ Не получилось распознать сумму. Введите число, например: <b>12000</b>.")
 
-    await state.update_data(amount=int(raw))
+    await state.update_data(amount=int(amount))
     await state.set_state(TransactionStates.waiting_for_category)
 
     data = await state.get_data()
@@ -63,7 +64,7 @@ async def set_category(cb: types.CallbackQuery, state: FSMContext):
     category = next((t for t, c in EXPENSE_CATEGORIES if c == code), None)
 
     if not category:
-        return await cb.answer("Ошибка категории")
+        return await cb.answer("Категория не найдена")
 
     await state.update_data(category=category)
     await state.set_state(TransactionStates.waiting_for_description)
@@ -74,7 +75,7 @@ async def set_category(cb: types.CallbackQuery, state: FSMContext):
     await cb.message.bot.edit_message_text(
         chat_id=cb.message.chat.id,
         message_id=bot_msg_id,
-        text="📝 <b>Введите описание (необязательно):</b>",
+        text="📝 <b>Описание (необязательно):</b>",
         reply_markup=description_keyboard()
     )
     await cb.answer()
@@ -133,7 +134,7 @@ def date_keyboard():
 
 @router.callback_query(F.data == "date_today")
 async def choose_today(cb: types.CallbackQuery, state: FSMContext):
-    await finish_expense(cb, state, date.today().isoformat())
+    await prepare_confirmation(cb, state, date.today().isoformat())
 
 
 @router.callback_query(F.data == "date_manual")
@@ -156,14 +157,57 @@ async def date_manual(cb: types.CallbackQuery, state: FSMContext):
 async def save_manual(message: types.Message, state: FSMContext):
     await safe_delete(message)
     date_value = message.text.strip()
-    await finish_expense(message, state, date_value)
+    try:
+        datetime.strptime(date_value, "%Y-%m-%d")
+    except ValueError:
+        return await message.answer("⚠ Неверный формат даты. Пример: <b>2026-02-05</b>")
+    await prepare_confirmation(message, state, date_value)
 
 
-async def finish_expense(obj, state, date_value):
+def confirm_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Сохранить", callback_data="expense_confirm")
+    kb.button(text="❌ Отменить", callback_data="menu_cancel")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+async def prepare_confirmation(obj, state: FSMContext, date_value: str):
     data = await state.get_data()
+    await state.update_data(date=date_value)
+    await state.set_state(TransactionStates.waiting_for_confirm)
+
+    amount_text = format_amount(data["amount"])
+    category = data["category"]
+    description = clean_text(data.get("description") or "—", 120)
+    date_text = format_date(date_value)
+
+    text = (
+        "🧾 <b>Проверьте расход</b>\n\n"
+        f"💸 Сумма: <b>{amount_text}</b>\n"
+        f"🏷 Категория: <b>{category}</b>\n"
+        f"📝 Описание: <b>{description}</b>\n"
+        f"📅 Дата: <b>{date_text}</b>\n\n"
+        "Сохранить операцию?"
+    )
+
+    bot_msg_id = data["bot_message_id"]
+    chat_id = obj.message.chat.id if isinstance(obj, types.CallbackQuery) else obj.chat.id
+    await obj.bot.edit_message_text(
+        chat_id=chat_id,
+        message_id=bot_msg_id,
+        text=text,
+        reply_markup=confirm_keyboard()
+    )
+
+
+@router.callback_query(TransactionStates.waiting_for_confirm, F.data == "expense_confirm")
+async def finish_expense(cb: types.CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    date_value = data.get("date")
 
     payload = {
-        "tg_user_id": obj.from_user.id,
+        "tg_user_id": cb.from_user.id,
         "items": [{
             "amount": -abs(data["amount"]),
             "category": data["category"],
@@ -175,31 +219,46 @@ async def finish_expense(obj, state, date_value):
 
     try:
         await rpc("transaction.import", payload)
-    except Exception as e:
-        if isinstance(obj, types.CallbackQuery):
-            return await obj.message.edit_text(f"❌ Ошибка сохранения:\n{e}", reply_markup=main_menu())
-        else:
-            return await obj.answer(f"❌ Ошибка сохранения:\n{e}", reply_markup=main_menu())
+    except Exception:
+        await state.clear()
+        return await cb.message.edit_text(
+            "⚠️ Не удалось сохранить расход. Попробуй позже.",
+            reply_markup=await get_main_menu(cb.from_user.id)
+        )
 
     bot_msg_id = data["bot_message_id"]
     await state.clear()
-
-    if isinstance(obj, types.CallbackQuery):
-        chat_id = obj.message.chat.id
-        bot = obj.bot
-    else:
-        chat_id = obj.chat.id
-        bot = obj.bot
-
-    await bot.edit_message_text(
-        chat_id=chat_id,
+    await cb.bot.edit_message_text(
+        chat_id=cb.message.chat.id,
         message_id=bot_msg_id,
         text=(
-            "✅ <b>Расход добавлен!</b>\n\n"
-            f"💸 Сумма: <b>{data['amount']:,} сум</b>\n"
+            "✅ <b>Расход записан</b>\n\n"
+            f"💸 Сумма: <b>{format_amount(data['amount'])}</b>\n"
             f"🏷 Категория: <b>{data['category']}</b>\n"
-            f"📅 Дата: <b>{date_value}</b>"
+            f"📅 Дата: <b>{format_date(date_value)}</b>\n"
+            "Хорошая работа. Так проще держать бюджет под контролем."
         ),
-        reply_markup=main_menu()
+        reply_markup=await get_main_menu(cb.from_user.id)
     )
+    await cb.answer()
 
+
+@router.callback_query(F.data == "add_expense_back")
+async def back_to_amount(cb: types.CallbackQuery, state: FSMContext):
+    await state.set_state(TransactionStates.waiting_for_amount)
+
+    data = await state.get_data()
+    bot_msg_id = data.get("bot_message_id")
+
+    if bot_msg_id:
+        await cb.message.bot.edit_message_text(
+            chat_id=cb.message.chat.id,
+            message_id=bot_msg_id,
+            text=(
+                "💸 <b>Новый расход</b>\n\n"
+                "Укажи сумму траты.\n"
+                "Пример: <b>12000</b> или <b>450 000</b>"
+            ),
+            reply_markup=back_button()
+        )
+    await cb.answer()

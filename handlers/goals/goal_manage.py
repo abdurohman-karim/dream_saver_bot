@@ -1,25 +1,51 @@
 # handlers/goal_manage.py
 
 from aiogram import Router, types, F
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from rpc import rpc
+from rpc import rpc, RPCError, RPCTransportError
 from keyboards.goals_manage import goals_list_keyboard, goal_manage_keyboard
 from states.goals import DepositGoal
+from ui.menus import get_main_menu
+from utils.ui import format_amount, format_date
+from ui.formatting import SEPARATOR
 
 router = Router()
+
+
+def deposit_input_keyboard(goal_id: int):
+    kb = InlineKeyboardBuilder()
+    kb.button(text="⬅️ Назад", callback_data=f"goal_manage_{goal_id}")
+    kb.button(text="❌ Отменить", callback_data="menu_cancel")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def deposit_confirm_keyboard(goal_id: int):
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Сохранить", callback_data="goal_deposit_confirm")
+    kb.button(text="⬅️ Назад", callback_data=f"goal_manage_{goal_id}")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def close_confirm_keyboard(goal_id: int):
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Закрыть цель", callback_data=f"goal_close_confirm_{goal_id}")
+    kb.button(text="⬅️ Назад", callback_data=f"goal_manage_{goal_id}")
+    kb.adjust(1)
+    return kb.as_markup()
 
 
 @router.callback_query(F.data == "menu_goals")
 async def menu_goals(cb: types.CallbackQuery):
     user_id = cb.from_user.id
-
-    result = await rpc("goal.list", {"tg_user_id": user_id})
-
-    if "error" in result:
+    try:
+        result = await rpc("goal.list", {"tg_user_id": user_id})
+    except (RPCError, RPCTransportError):
         await cb.message.edit_text(
-            f"⚠️ Ошибка сервера при загрузке целей.",
+            "⚠️ Не удалось загрузить цели. Попробуй позже.",
             reply_markup=goals_list_keyboard([])
         )
         return await cb.answer()
@@ -35,7 +61,7 @@ async def menu_goals(cb: types.CallbackQuery):
         kb.adjust(1)
 
         await cb.message.edit_text(
-            "У тебя ещё нет целей.\n\nНажми «Создать цель» в главном меню 🎯",
+            "Пока нет целей.\n\nСоздай первую — и начнем отслеживать прогресс.",
             reply_markup=kb.as_markup()
         )
         return await cb.answer()
@@ -49,13 +75,21 @@ async def menu_goals(cb: types.CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("goal_manage_"))
-async def goal_manage(cb: types.CallbackQuery):
+async def goal_manage(cb: types.CallbackQuery, state: FSMContext):
     goal_id = int(cb.data.split("_")[-1])
     user_id = cb.from_user.id
+    await state.clear()
 
-    result = await rpc("goal.get", {"tg_user_id": user_id, "goal_id": goal_id})
-    res = result.get("result") or result
-    goal = res
+    try:
+        result = await rpc("goal.get", {"tg_user_id": user_id, "goal_id": goal_id})
+    except (RPCError, RPCTransportError):
+        await cb.message.edit_text(
+            "⚠️ Не удалось загрузить цель. Попробуй позже.",
+            reply_markup=await get_main_menu(cb.from_user.id)
+        )
+        return await cb.answer()
+
+    goal = result.get("result") or result
 
     icon = goal.get("icon", "🎯")
     title = goal["title"]
@@ -72,12 +106,13 @@ async def goal_manage(cb: types.CallbackQuery):
 
     text = (
         f"{icon} <b>{title}</b>\n\n"
-        f"💰 {saved:,} / {total:,}\n"
-        f"📈 Прогресс: {percent}%\n"
-        f"{bar}\n\n"
+        f"💰 {format_amount(saved)} / {format_amount(total)}\n"
+        f"📈 Прогресс: <b>{percent}%</b>\n"
+        f"{bar}\n"
+        f"{SEPARATOR}\n"
         f"⭐ Основная: {'Да' if is_primary else 'Нет'}\n"
         f"🔢 Приоритет: {pr}\n"
-        f"📅 Дедлайн: {deadline}\n"
+        f"📅 Дедлайн: {format_date(deadline)}\n"
     )
 
     await cb.message.edit_text(
@@ -96,7 +131,7 @@ async def set_primary(cb: types.CallbackQuery):
         "goal_id": goal_id
     })
 
-    await cb.answer("⭐ Теперь это основная цель")
+    await cb.answer("⭐ Основная цель обновлена")
     await menu_goals(cb)
 
 
@@ -120,12 +155,12 @@ async def priority_down(cb: types.CallbackQuery):
 async def deposit_start(cb: types.CallbackQuery, state: FSMContext):
     goal_id = int(cb.data.split("_")[-1])
 
-    await state.update_data(goal_id=goal_id)
+    await state.update_data(goal_id=goal_id, bot_message_id=cb.message.message_id)
 
     await cb.message.edit_text(
-        "💸 <b>Введите сумму пополнения</b>\n\n"
-        "Можно отправить просто число, например: <b>150000</b>.\n"
-        "Для отмены нажмите «Назад»."
+        "💸 <b>Пополнение цели</b>\n\n"
+        "Введи сумму. Пример: <b>150000</b>.",
+        reply_markup=deposit_input_keyboard(goal_id)
     )
 
     await state.set_state(DepositGoal.waiting_for_amount)
@@ -134,14 +169,30 @@ async def deposit_start(cb: types.CallbackQuery, state: FSMContext):
 @router.callback_query(F.data.startswith("goal_close_completed_"))
 async def close_goal(cb: types.CallbackQuery):
     goal_id = int(cb.data.split("_")[-1])
+    await cb.message.edit_text(
+        "🛑 <b>Закрыть цель?</b>\n\n"
+        "Цель будет помечена как завершённая. Можно восстановить позже.",
+        reply_markup=close_confirm_keyboard(goal_id)
+    )
+    await cb.answer()
 
-    result = await rpc("goal.close", {
-        "tg_user_id": cb.from_user.id,
-        "goal_id": goal_id
-    })
 
-    await cb.answer("🛑 Цель закрыта")
+@router.callback_query(F.data.startswith("goal_close_confirm_"))
+async def close_goal_confirm(cb: types.CallbackQuery):
+    goal_id = int(cb.data.split("_")[-1])
+    try:
+        result = await rpc("goal.close", {
+            "tg_user_id": cb.from_user.id,
+            "goal_id": goal_id
+        })
+    except (RPCError, RPCTransportError):
+        await cb.message.edit_text(
+            "⚠️ Не удалось закрыть цель. Попробуй позже.",
+            reply_markup=await get_main_menu(cb.from_user.id)
+        )
+        return await cb.answer()
 
+    await cb.answer("Цель закрыта")
     await render_goal(cb, goal_id, rpc_result=result)
 
 
@@ -173,30 +224,54 @@ async def deposit_amount_handler(message: types.Message, state: FSMContext):
     data = await state.get_data()
     goal_id = data["goal_id"]
 
-    result = await rpc("goal.deposit", {
-        "tg_user_id": message.from_user.id,
-        "goal_id": goal_id,
-        "amount": amount,
-        "method": "manual"
-    })
-
-    goal = result.get("result") or result
-
-    await state.clear()
-
     try:
         await message.delete()
     except:
         pass
 
-    pretty = f"{amount:,.0f}".replace(",", " ")
+    await state.update_data(amount=amount)
+    await state.set_state(DepositGoal.waiting_for_confirm)
 
-    await message.answer(
-        f"💰 <b>Успешно пополнено!</b>\n"
-        f"Ты добавил <b>{pretty} сум</b> в цель <b>{goal['title']}</b> 🎯",
-    )
+    bot_msg_id = data.get("bot_message_id")
+    if bot_msg_id:
+        await message.bot.edit_message_text(
+            chat_id=message.chat.id,
+            message_id=bot_msg_id,
+            text=(
+                "🧾 <b>Проверьте пополнение</b>\n\n"
+                f"💰 Сумма: <b>{format_amount(amount)}</b>\n"
+                "Сохранить пополнение?"
+            ),
+            reply_markup=deposit_confirm_keyboard(goal_id)
+        )
 
-    await render_goal(message, goal_id, rpc_result=result)
+    return None
+
+
+@router.callback_query(DepositGoal.waiting_for_confirm, F.data == "goal_deposit_confirm")
+async def deposit_confirm(cb: types.CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    goal_id = data["goal_id"]
+    amount = data["amount"]
+
+    try:
+        result = await rpc("goal.deposit", {
+            "tg_user_id": cb.from_user.id,
+            "goal_id": goal_id,
+            "amount": amount,
+            "method": "manual"
+        })
+    except (RPCError, RPCTransportError):
+        await state.clear()
+        await cb.message.edit_text(
+            "⚠️ Не удалось сохранить пополнение. Попробуй позже.",
+            reply_markup=await get_main_menu(cb.from_user.id)
+        )
+        return await cb.answer()
+
+    await state.clear()
+    await cb.answer("Пополнение сохранено")
+    await render_goal(cb, goal_id, rpc_result=result)
 
 
 
@@ -206,8 +281,18 @@ async def render_goal(event: types.Message | types.CallbackQuery, goal_id: int, 
     if rpc_result:
         goal = rpc_result.get("result") or rpc_result
     else:
-        result = await rpc("goal.get", {"tg_user_id": user_id, "goal_id": goal_id})
-        goal = result.get("result") or result
+        try:
+            result = await rpc("goal.get", {"tg_user_id": user_id, "goal_id": goal_id})
+            goal = result.get("result") or result
+        except (RPCError, RPCTransportError):
+            if isinstance(event, types.CallbackQuery):
+                await event.message.edit_text(
+                    "⚠️ Не удалось загрузить цель. Попробуй позже.",
+                    reply_markup=await get_main_menu(event.from_user.id)
+                )
+                return await event.answer()
+            await event.answer("⚠️ Не удалось загрузить цель. Попробуй позже.")
+            return None
 
     icon = goal.get("icon", "🎯")
     title = goal["title"]
@@ -223,12 +308,13 @@ async def render_goal(event: types.Message | types.CallbackQuery, goal_id: int, 
 
     text = (
         f"{icon} <b>{title}</b>\n\n"
-        f"💰 {saved:,} / {total:,}\n"
-        f"📈 Прогресс: {percent}%\n"
-        f"{bar}\n\n"
+        f"💰 {format_amount(saved)} / {format_amount(total)}\n"
+        f"📈 Прогресс: <b>{percent}%</b>\n"
+        f"{bar}\n"
+        f"{SEPARATOR}\n"
         f"⭐ Основная: {'Да' if is_primary else 'Нет'}\n"
         f"🔢 Приоритет: {pr}\n"
-        f"📅 Дедлайн: {deadline}\n"
+        f"📅 Дедлайн: {format_date(deadline)}\n"
     )
 
     markup = goal_manage_keyboard(goal_id, is_primary, status)
@@ -244,5 +330,3 @@ async def render_goal(event: types.Message | types.CallbackQuery, goal_id: int, 
     # Если это обычное сообщение (после ввода суммы)
     if isinstance(event, types.Message):
         return await event.answer(text, reply_markup=markup)
-
-
