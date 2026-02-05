@@ -13,6 +13,7 @@ from .daily import router as daily_router
 from .add_transaction import router as add_tr_router
 from .add_income import router as add_income_router
 from .clear_chat import router as clear_chat_router
+from .registration import router as registration_router
 from .onboarding import router as onboarding_router
 from .insights import router as insights_router
 
@@ -35,6 +36,7 @@ main_router.include_router(daily_router)
 main_router.include_router(add_tr_router)
 main_router.include_router(add_income_router)
 main_router.include_router(clear_chat_router)
+main_router.include_router(registration_router)
 main_router.include_router(onboarding_router)
 main_router.include_router(insights_router)
 

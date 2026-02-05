@@ -24,7 +24,7 @@ def deposit_input_keyboard(goal_id: int):
 
 def deposit_confirm_keyboard(goal_id: int):
     kb = InlineKeyboardBuilder()
-    kb.button(text="✅ Сохранить", callback_data="goal_deposit_confirm")
+    kb.button(text="✅ Сохранить", callback_data=f"goal_deposit_confirm_{goal_id}")
     kb.button(text="⬅️ Назад", callback_data=f"goal_manage_{goal_id}")
     kb.adjust(1)
     return kb.as_markup()
@@ -151,7 +151,7 @@ async def priority_down(cb: types.CallbackQuery):
     await render_goal(cb, goal_id)
 
 
-@router.callback_query(F.data.startswith("goal_deposit_"))
+@router.callback_query(F.data.regexp(r"^goal_deposit_\d+$"))
 async def deposit_start(cb: types.CallbackQuery, state: FSMContext):
     goal_id = int(cb.data.split("_")[-1])
 
@@ -248,7 +248,7 @@ async def deposit_amount_handler(message: types.Message, state: FSMContext):
     return None
 
 
-@router.callback_query(DepositGoal.waiting_for_confirm, F.data == "goal_deposit_confirm")
+@router.callback_query(DepositGoal.waiting_for_confirm, F.data.regexp(r"^goal_deposit_confirm_\d+$"))
 async def deposit_confirm(cb: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     goal_id = data["goal_id"]

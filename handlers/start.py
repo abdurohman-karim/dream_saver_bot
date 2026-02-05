@@ -3,9 +3,11 @@ from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import Command
 
-from rpc import rpc, RPCError, RPCTransportError
+from rpc import rpc, RPCError, RPCTransportError, telegram_status
 from ui.menus import get_main_menu, get_user_flags
 from handlers.onboarding import start_onboarding
+from handlers.registration import send_registration_prompt
+from storage.registration_store import store
 
 router = Router()
 
@@ -26,6 +28,17 @@ async def cmd_start(message: types.Message, state: FSMContext):
         )
 
     await state.clear()
+
+    try:
+        is_registered = await telegram_status(tg_id)
+    except RPCTransportError:
+        is_registered = store.is_registered(tg_id)
+
+    if not is_registered:
+        return await send_registration_prompt(message)
+
+    store.set_registered(tg_id, True)
+
     flags = await get_user_flags(tg_id)
     if flags.get("is_new_user"):
         return await start_onboarding(message, state)
