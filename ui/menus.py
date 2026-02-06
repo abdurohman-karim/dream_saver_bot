@@ -44,6 +44,6 @@ async def get_user_flags(tg_user_id: int) -> dict:
     return flags
 
 
-async def get_main_menu(tg_user_id: int):
+async def get_main_menu(tg_user_id: int, lang: str | None = None):
     flags = await get_user_flags(tg_user_id)
-    return main_menu(flags)
+    return main_menu(flags, lang)

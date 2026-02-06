@@ -11,132 +11,132 @@ from rpc import rpc, RPCError, RPCTransportError
 from handlers.goals.goal_create import new_goal_start
 from handlers.add_income import add_income_start
 from handlers.add_transaction import add_start
+from i18n import t
 
 router = Router()
 
 
-def onboarding_start_keyboard():
+def onboarding_start_keyboard(lang: str | None = None):
     kb = InlineKeyboardBuilder()
-    kb.button(text="Начать", callback_data="onb_start")
-    kb.button(text="Пропустить", callback_data="onb_skip")
+    kb.button(text=t("onboarding.button.start", lang), callback_data="onb_start")
+    kb.button(text=t("onboarding.button.skip", lang), callback_data="onb_skip")
     kb.adjust(2)
     return kb.as_markup()
 
 
-def onboarding_focus_keyboard():
+def onboarding_focus_keyboard(lang: str | None = None):
     kb = InlineKeyboardBuilder()
-    kb.button(text="🎯 Копить на цель", callback_data="onb_focus_save")
-    kb.button(text="📌 Контроль расходов", callback_data="onb_focus_track")
-    kb.button(text="Пропустить", callback_data="onb_skip")
+    kb.button(text=t("onboarding.focus.save", lang), callback_data="onb_focus_save")
+    kb.button(text=t("onboarding.focus.track", lang), callback_data="onb_focus_track")
+    kb.button(text=t("onboarding.button.skip", lang), callback_data="onb_skip")
     kb.adjust(1)
     return kb.as_markup()
 
 
-def onboarding_goal_keyboard():
+def onboarding_goal_keyboard(lang: str | None = None):
     kb = InlineKeyboardBuilder()
-    kb.button(text="🎯 Создать цель", callback_data="onb_goal_create")
-    kb.button(text="Пропустить", callback_data="onb_goal_skip")
+    kb.button(text=t("onboarding.goal.button.create", lang), callback_data="onb_goal_create")
+    kb.button(text=t("onboarding.goal.button.skip", lang), callback_data="onb_goal_skip")
     kb.adjust(1)
     return kb.as_markup()
 
 
-def onboarding_income_keyboard():
+def onboarding_income_keyboard(lang: str | None = None):
     kb = InlineKeyboardBuilder()
-    kb.button(text="💰 Добавить доход", callback_data="onb_income_add")
-    kb.button(text="💸 Добавить расход", callback_data="onb_expense_add")
-    kb.button(text="Позже", callback_data="onb_finish")
+    kb.button(text=t("onboarding.income.button.income", lang), callback_data="onb_income_add")
+    kb.button(text=t("onboarding.income.button.expense", lang), callback_data="onb_expense_add")
+    kb.button(text=t("onboarding.income.button.later", lang), callback_data="onb_finish")
     kb.adjust(1)
     return kb.as_markup()
 
 
-async def start_onboarding(message: types.Message, state: FSMContext | None = None):
+async def start_onboarding(message: types.Message, state: FSMContext | None = None, lang: str | None = None):
     if state:
         await state.set_state(OnboardingStates.welcome)
     await message.answer(
-        header("Добро пожаловать в Finora", "info")
+        header(t("onboarding.start.title", lang), "info")
         + "\n\n"
-        + "Я помогу вести финансы спокойно и системно.\n"
-        + "Небольшая настройка займет меньше минуты.",
-        reply_markup=onboarding_start_keyboard()
+        + t("onboarding.start.body", lang),
+        reply_markup=onboarding_start_keyboard(lang)
     )
 
 
 @router.callback_query(F.data == "onb_start")
-async def onboarding_begin(cb: types.CallbackQuery, state: FSMContext):
+async def onboarding_begin(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
     await state.set_state(OnboardingStates.focus)
     await cb.message.edit_text(
-        header("С чего начнем?", "info")
+        header(t("onboarding.focus.title", lang), "info")
         + "\n\n"
-        + "Выбери главный фокус на сегодня.",
-        reply_markup=onboarding_focus_keyboard()
+        + t("onboarding.focus.body", lang),
+        reply_markup=onboarding_focus_keyboard(lang)
     )
     await cb.answer()
 
 
 @router.callback_query(F.data == "onb_skip")
-async def onboarding_skip(cb: types.CallbackQuery, state: FSMContext):
+async def onboarding_skip(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
     await state.clear()
     await cb.message.edit_text(
-        header("Главное меню", "info")
+        header(t("menu.main.title", lang), None)
         + "\n\n"
-        + "Дальше можно двигаться в своем темпе.",
-        reply_markup=await get_main_menu(cb.from_user.id)
+        + t("menu.main.subtitle", lang),
+        reply_markup=await get_main_menu(cb.from_user.id, lang)
     )
     await cb.answer()
 
 
 @router.callback_query(F.data.in_(["onb_focus_save", "onb_focus_track"]))
-async def onboarding_focus(cb: types.CallbackQuery, state: FSMContext):
+async def onboarding_focus(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
     focus = "save" if cb.data == "onb_focus_save" else "track"
     await state.update_data(focus=focus)
     await state.set_state(OnboardingStates.offer_goal)
 
-    title = "Давай зафиксируем первую цель" if focus == "save" else "Можно создать цель и для контроля"
+    title = t("onboarding.goal.title.save", lang) if focus == "save" else t("onboarding.goal.title.track", lang)
     text = (
         header(title, "goal")
         + "\n\n"
-        + "Цель помогает держать фокус и видеть прогресс."
+        + t("onboarding.goal.body", lang)
     )
 
-    await cb.message.edit_text(text, reply_markup=onboarding_goal_keyboard())
+    await cb.message.edit_text(text, reply_markup=onboarding_goal_keyboard(lang))
     await cb.answer()
 
 
 @router.callback_query(F.data == "onb_goal_create")
-async def onboarding_goal_create(cb: types.CallbackQuery, state: FSMContext):
+async def onboarding_goal_create(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
     await state.clear()
     await cb.answer()
-    return await new_goal_start(cb, state)
+    return await new_goal_start(cb, state, lang=lang)
 
 
 @router.callback_query(F.data == "onb_goal_skip")
-async def onboarding_goal_skip(cb: types.CallbackQuery, state: FSMContext):
+async def onboarding_goal_skip(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
     await state.set_state(OnboardingStates.offer_income)
     await cb.message.edit_text(
-        header("Добавим первую операцию", "info")
+        header(t("onboarding.income.title", lang), "info")
         + "\n\n"
-        + "Это поможет сразу увидеть реальную картину.",
-        reply_markup=onboarding_income_keyboard()
+        + t("onboarding.income.body", lang),
+        reply_markup=onboarding_income_keyboard(lang)
     )
     await cb.answer()
 
 
 @router.callback_query(F.data == "onb_income_add")
-async def onboarding_income_add(cb: types.CallbackQuery, state: FSMContext):
+async def onboarding_income_add(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
     await state.clear()
     await cb.answer()
-    return await add_income_start(cb, state)
+    return await add_income_start(cb, state, lang=lang)
 
 
 @router.callback_query(F.data == "onb_expense_add")
-async def onboarding_expense_add(cb: types.CallbackQuery, state: FSMContext):
+async def onboarding_expense_add(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
     await state.clear()
     await cb.answer()
-    return await add_start(cb, state)
+    return await add_start(cb, state, lang=lang)
 
 
 @router.callback_query(F.data == "onb_finish")
-async def onboarding_finish(cb: types.CallbackQuery, state: FSMContext):
+async def onboarding_finish(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
     await state.clear()
 
     today = date.today().isoformat()
@@ -150,16 +150,16 @@ async def onboarding_finish(cb: types.CallbackQuery, state: FSMContext):
     balance = float(income) - float(expense)
 
     lines = [
-        money_line("Доход", income, "income", sign="+"),
-        money_line("Расход", expense, "expense", sign="-"),
+        money_line(t("label.income", lang), income, "income", sign="+"),
+        money_line(t("label.expense", lang), expense, "expense", sign="-"),
         SEPARATOR,
-        money_line("Баланс", balance, "progress"),
+        money_line(t("label.balance", lang), balance, "progress"),
     ]
 
-    text = header("Сегодняшняя сводка", "insights") + "\n\n" + "\n".join(lines)
+    text = header(t("onboarding.finish.title", lang), "insights") + "\n\n" + "\n".join(lines)
 
     await cb.message.edit_text(
         text,
-        reply_markup=await get_main_menu(cb.from_user.id)
+        reply_markup=await get_main_menu(cb.from_user.id, lang)
     )
     await cb.answer()

@@ -1,21 +1,14 @@
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from i18n import t
+from utils.categories import EXPENSE_CATEGORY_KEYS, expense_category_label
 
 
-EXPENSE_CATEGORIES = [
-    ("🍔 Еда", "cat_food"),
-    ("🚌 Транспорт", "cat_transport"),
-    ("🛒 Супермаркет", "cat_market"),
-    ("📦 Покупки", "cat_shopping"),
-    ("💳 Подписки", "cat_subscriptions"),
-    ("🎉 Развлечения", "cat_fun"),
-]
-
-
-def expense_category_keyboard():
+def expense_category_keyboard(lang: str | None = None):
     kb = InlineKeyboardBuilder()
-    for text, code in EXPENSE_CATEGORIES:
-        kb.button(text=text, callback_data=code)
-    kb.button(text="⬅️ Назад", callback_data="add_expense_back")
-    kb.button(text="❌ Отменить", callback_data="menu_cancel")
+    for key in EXPENSE_CATEGORY_KEYS:
+        kb.button(text=expense_category_label(key, lang), callback_data=f"cat_{key}")
+    kb.button(text=t("common.back", lang), callback_data="add_expense_back")
+    kb.button(text=t("common.cancel", lang), callback_data="menu_cancel")
     kb.adjust(2)
     return kb.as_markup()
+

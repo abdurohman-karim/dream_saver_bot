@@ -16,6 +16,7 @@ from .clear_chat import router as clear_chat_router
 from .registration import router as registration_router
 from .onboarding import router as onboarding_router
 from .insights import router as insights_router
+from .settings import router as settings_router
 
 from handlers.goals.goal_create import router as goals_create_router
 from handlers.goals.goal_manage import router as goals_manage_router
@@ -39,6 +40,7 @@ main_router.include_router(clear_chat_router)
 main_router.include_router(registration_router)
 main_router.include_router(onboarding_router)
 main_router.include_router(insights_router)
+main_router.include_router(settings_router)
 
 # цели
 main_router.include_router(goals_create_router)

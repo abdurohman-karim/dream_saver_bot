@@ -10,43 +10,44 @@ from states.goals import DepositGoal
 from ui.menus import get_main_menu
 from utils.ui import format_amount, format_date
 from ui.formatting import SEPARATOR
+from i18n import t
 
 router = Router()
 
 
-def deposit_input_keyboard(goal_id: int):
+def deposit_input_keyboard(goal_id: int, lang: str | None = None):
     kb = InlineKeyboardBuilder()
-    kb.button(text="⬅️ Назад", callback_data=f"goal_manage_{goal_id}")
-    kb.button(text="❌ Отменить", callback_data="menu_cancel")
+    kb.button(text=t("common.back", lang), callback_data=f"goal_manage_{goal_id}")
+    kb.button(text=t("common.cancel", lang), callback_data="menu_cancel")
     kb.adjust(1)
     return kb.as_markup()
 
 
-def deposit_confirm_keyboard(goal_id: int):
+def deposit_confirm_keyboard(goal_id: int, lang: str | None = None):
     kb = InlineKeyboardBuilder()
-    kb.button(text="✅ Сохранить", callback_data=f"goal_deposit_confirm_{goal_id}")
-    kb.button(text="⬅️ Назад", callback_data=f"goal_manage_{goal_id}")
+    kb.button(text=t("common.save", lang), callback_data=f"goal_deposit_confirm_{goal_id}")
+    kb.button(text=t("common.back", lang), callback_data=f"goal_manage_{goal_id}")
     kb.adjust(1)
     return kb.as_markup()
 
 
-def close_confirm_keyboard(goal_id: int):
+def close_confirm_keyboard(goal_id: int, lang: str | None = None):
     kb = InlineKeyboardBuilder()
-    kb.button(text="✅ Закрыть цель", callback_data=f"goal_close_confirm_{goal_id}")
-    kb.button(text="⬅️ Назад", callback_data=f"goal_manage_{goal_id}")
+    kb.button(text=t("goals.button.close", lang), callback_data=f"goal_close_confirm_{goal_id}")
+    kb.button(text=t("common.back", lang), callback_data=f"goal_manage_{goal_id}")
     kb.adjust(1)
     return kb.as_markup()
 
 
 @router.callback_query(F.data == "menu_goals")
-async def menu_goals(cb: types.CallbackQuery):
+async def menu_goals(cb: types.CallbackQuery, lang: str | None = None):
     user_id = cb.from_user.id
     try:
         result = await rpc("goal.list", {"tg_user_id": user_id})
     except (RPCError, RPCTransportError):
         await cb.message.edit_text(
-            "⚠️ Не удалось загрузить цели. Попробуй позже.",
-            reply_markup=goals_list_keyboard([])
+            t("goals.manage.list_error", lang),
+            reply_markup=goals_list_keyboard([], lang)
         )
         return await cb.answer()
 
@@ -54,28 +55,27 @@ async def menu_goals(cb: types.CallbackQuery):
     goals = res.get("goals", [])
 
     if not goals:
-        from aiogram.utils.keyboard import InlineKeyboardBuilder
         kb = InlineKeyboardBuilder()
-        kb.button(text="➕ Создать цель", callback_data="menu_newgoal")
-        kb.button(text="⬅️ Назад", callback_data="menu_back")
+        kb.button(text=t("goals.menu.create_button", lang), callback_data="menu_newgoal")
+        kb.button(text=t("common.back", lang), callback_data="menu_back")
         kb.adjust(1)
 
         await cb.message.edit_text(
-            "Пока нет целей.\n\nСоздай первую — и начнем отслеживать прогресс.",
+            t("goals.menu.empty", lang),
             reply_markup=kb.as_markup()
         )
         return await cb.answer()
 
     await cb.message.edit_text(
-        "🎯 <b>Твои цели:</b>",
-        reply_markup=goals_list_keyboard(goals)
+        t("goals.menu.title", lang),
+        reply_markup=goals_list_keyboard(goals, lang)
     )
     await cb.answer()
     return None
 
 
 @router.callback_query(F.data.startswith("goal_manage_"))
-async def goal_manage(cb: types.CallbackQuery, state: FSMContext):
+async def goal_manage(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
     goal_id = int(cb.data.split("_")[-1])
     user_id = cb.from_user.id
     await state.clear()
@@ -84,8 +84,8 @@ async def goal_manage(cb: types.CallbackQuery, state: FSMContext):
         result = await rpc("goal.get", {"tg_user_id": user_id, "goal_id": goal_id})
     except (RPCError, RPCTransportError):
         await cb.message.edit_text(
-            "⚠️ Не удалось загрузить цель. Попробуй позже.",
-            reply_markup=await get_main_menu(cb.from_user.id)
+            t("goals.manage.load_error", lang),
+            reply_markup=await get_main_menu(cb.from_user.id, lang)
         )
         return await cb.answer()
 
@@ -102,28 +102,28 @@ async def goal_manage(cb: types.CallbackQuery, state: FSMContext):
     is_primary = goal.get("is_primary", False)
     pr = goal.get("priority", 1)
     status = goal.get("status", "active")
-    deadline = goal.get("deadline") or "Без дедлайна"
+    deadline = goal.get("deadline") or "—"
 
     text = (
         f"{icon} <b>{title}</b>\n\n"
         f"💰 {format_amount(saved)} / {format_amount(total)}\n"
-        f"📈 Прогресс: <b>{percent}%</b>\n"
+        f"📈 {t('label.progress', lang)}: <b>{percent}%</b>\n"
         f"{bar}\n"
         f"{SEPARATOR}\n"
-        f"⭐ Основная: {'Да' if is_primary else 'Нет'}\n"
-        f"🔢 Приоритет: {pr}\n"
-        f"📅 Дедлайн: {format_date(deadline)}\n"
+        f"{t('goals.detail.primary', lang)}: {t('common.yes', lang) if is_primary else t('common.no', lang)}\n"
+        f"{t('goals.detail.priority', lang)}: {pr}\n"
+        f"{t('goals.detail.deadline', lang)}: {format_date(deadline)}\n"
     )
 
     await cb.message.edit_text(
         text,
-        reply_markup=goal_manage_keyboard(goal_id, is_primary, status)
+        reply_markup=goal_manage_keyboard(goal_id, is_primary, status, lang)
     )
     await cb.answer()
 
 
 @router.callback_query(F.data.startswith("goal_set_primary_"))
-async def set_primary(cb: types.CallbackQuery):
+async def set_primary(cb: types.CallbackQuery, lang: str | None = None):
     goal_id = int(cb.data.split("_")[-1])
 
     await rpc("goal.setPrimary", {
@@ -131,54 +131,53 @@ async def set_primary(cb: types.CallbackQuery):
         "goal_id": goal_id
     })
 
-    await cb.answer("⭐ Основная цель обновлена")
-    await menu_goals(cb)
+    await cb.answer(t("goals.manage.primary_updated", lang))
+    await menu_goals(cb, lang=lang)
 
 
 @router.callback_query(F.data.startswith("goal_priority_up_"))
-async def priority_up(cb: types.CallbackQuery):
+async def priority_up(cb: types.CallbackQuery, lang: str | None = None):
     goal_id = int(cb.data.split("_")[-1])
     await rpc("goal.priority.up", {"tg_user_id": cb.from_user.id, "goal_id": goal_id})
 
-    await render_goal(cb, goal_id)
+    await render_goal(cb, goal_id, lang=lang)
 
 
 @router.callback_query(F.data.startswith("goal_priority_down_"))
-async def priority_down(cb: types.CallbackQuery):
+async def priority_down(cb: types.CallbackQuery, lang: str | None = None):
     goal_id = int(cb.data.split("_")[-1])
     await rpc("goal.priority.down", {"tg_user_id": cb.from_user.id, "goal_id": goal_id})
 
-    await render_goal(cb, goal_id)
+    await render_goal(cb, goal_id, lang=lang)
 
 
 @router.callback_query(F.data.regexp(r"^goal_deposit_\d+$"))
-async def deposit_start(cb: types.CallbackQuery, state: FSMContext):
+async def deposit_start(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
     goal_id = int(cb.data.split("_")[-1])
 
     await state.update_data(goal_id=goal_id, bot_message_id=cb.message.message_id)
 
     await cb.message.edit_text(
-        "💸 <b>Пополнение цели</b>\n\n"
-        "Введи сумму. Пример: <b>150000</b>.",
-        reply_markup=deposit_input_keyboard(goal_id)
+        t("goals.manage.deposit_prompt", lang),
+        reply_markup=deposit_input_keyboard(goal_id, lang)
     )
 
     await state.set_state(DepositGoal.waiting_for_amount)
     await cb.answer()
 
+
 @router.callback_query(F.data.startswith("goal_close_completed_"))
-async def close_goal(cb: types.CallbackQuery):
+async def close_goal(cb: types.CallbackQuery, lang: str | None = None):
     goal_id = int(cb.data.split("_")[-1])
     await cb.message.edit_text(
-        "🛑 <b>Закрыть цель?</b>\n\n"
-        "Цель будет помечена как завершённая. Можно восстановить позже.",
-        reply_markup=close_confirm_keyboard(goal_id)
+        t("goals.manage.close_prompt", lang),
+        reply_markup=close_confirm_keyboard(goal_id, lang)
     )
     await cb.answer()
 
 
 @router.callback_query(F.data.startswith("goal_close_confirm_"))
-async def close_goal_confirm(cb: types.CallbackQuery):
+async def close_goal_confirm(cb: types.CallbackQuery, lang: str | None = None):
     goal_id = int(cb.data.split("_")[-1])
     try:
         result = await rpc("goal.close", {
@@ -187,17 +186,17 @@ async def close_goal_confirm(cb: types.CallbackQuery):
         })
     except (RPCError, RPCTransportError):
         await cb.message.edit_text(
-            "⚠️ Не удалось закрыть цель. Попробуй позже.",
-            reply_markup=await get_main_menu(cb.from_user.id)
+            t("goals.manage.close_error", lang),
+            reply_markup=await get_main_menu(cb.from_user.id, lang)
         )
         return await cb.answer()
 
-    await cb.answer("Цель закрыта")
-    await render_goal(cb, goal_id, rpc_result=result)
+    await cb.answer(t("goals.manage.closed", lang))
+    await render_goal(cb, goal_id, rpc_result=result, lang=lang)
 
 
 @router.callback_query(F.data.startswith("goal_reopen_"))
-async def reopen_goal(cb: types.CallbackQuery):
+async def reopen_goal(cb: types.CallbackQuery, lang: str | None = None):
     goal_id = int(cb.data.split("_")[-1])
 
     result = await rpc("goal.reopen", {
@@ -205,13 +204,13 @@ async def reopen_goal(cb: types.CallbackQuery):
         "goal_id": goal_id
     })
 
-    await cb.answer("♻️ Цель снова активна")
+    await cb.answer(t("goals.manage.reopened", lang))
 
-    await render_goal(cb, goal_id, rpc_result=result)
+    await render_goal(cb, goal_id, rpc_result=result, lang=lang)
 
 
 @router.message(DepositGoal.waiting_for_amount)
-async def deposit_amount_handler(message: types.Message, state: FSMContext):
+async def deposit_amount_handler(message: types.Message, state: FSMContext, lang: str | None = None):
     text = message.text.replace(" ", "").replace(",", ".")
 
     try:
@@ -219,7 +218,7 @@ async def deposit_amount_handler(message: types.Message, state: FSMContext):
         if amount <= 0:
             raise ValueError
     except:
-        return await message.answer("⚠️ Введи корректную сумму, например: <b>100000</b>")
+        return await message.answer(t("goals.create.amount_invalid", lang))
 
     data = await state.get_data()
     goal_id = data["goal_id"]
@@ -238,18 +237,18 @@ async def deposit_amount_handler(message: types.Message, state: FSMContext):
             chat_id=message.chat.id,
             message_id=bot_msg_id,
             text=(
-                "🧾 <b>Проверьте пополнение</b>\n\n"
-                f"💰 Сумма: <b>{format_amount(amount)}</b>\n"
-                "Сохранить пополнение?"
+                f"{t('goals.manage.deposit_confirm_title', lang)}\n\n"
+                f"💰 {t('label.amount', lang)}: <b>{format_amount(amount)}</b>\n"
+                f"{t('goals.manage.deposit_confirm_question', lang)}"
             ),
-            reply_markup=deposit_confirm_keyboard(goal_id)
+            reply_markup=deposit_confirm_keyboard(goal_id, lang)
         )
 
     return None
 
 
 @router.callback_query(DepositGoal.waiting_for_confirm, F.data.regexp(r"^goal_deposit_confirm_\d+$"))
-async def deposit_confirm(cb: types.CallbackQuery, state: FSMContext):
+async def deposit_confirm(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
     data = await state.get_data()
     goal_id = data["goal_id"]
     amount = data["amount"]
@@ -264,18 +263,17 @@ async def deposit_confirm(cb: types.CallbackQuery, state: FSMContext):
     except (RPCError, RPCTransportError):
         await state.clear()
         await cb.message.edit_text(
-            "⚠️ Не удалось сохранить пополнение. Попробуй позже.",
-            reply_markup=await get_main_menu(cb.from_user.id)
+            t("goals.manage.deposit_error", lang),
+            reply_markup=await get_main_menu(cb.from_user.id, lang)
         )
         return await cb.answer()
 
     await state.clear()
-    await cb.answer("Пополнение сохранено")
-    await render_goal(cb, goal_id, rpc_result=result)
+    await cb.answer(t("goals.manage.deposit_saved", lang))
+    await render_goal(cb, goal_id, rpc_result=result, lang=lang)
 
 
-
-async def render_goal(event: types.Message | types.CallbackQuery, goal_id: int, rpc_result=None):
+async def render_goal(event: types.Message | types.CallbackQuery, goal_id: int, rpc_result=None, lang: str | None = None):
     user_id = event.from_user.id
 
     if rpc_result:
@@ -287,11 +285,11 @@ async def render_goal(event: types.Message | types.CallbackQuery, goal_id: int, 
         except (RPCError, RPCTransportError):
             if isinstance(event, types.CallbackQuery):
                 await event.message.edit_text(
-                    "⚠️ Не удалось загрузить цель. Попробуй позже.",
-                    reply_markup=await get_main_menu(event.from_user.id)
+                    t("goals.manage.load_error", lang),
+                    reply_markup=await get_main_menu(event.from_user.id, lang)
                 )
                 return await event.answer()
-            await event.answer("⚠️ Не удалось загрузить цель. Попробуй позже.")
+            await event.answer(t("goals.manage.load_error", lang))
             return None
 
     icon = goal.get("icon", "🎯")
@@ -304,20 +302,20 @@ async def render_goal(event: types.Message | types.CallbackQuery, goal_id: int, 
     is_primary = goal.get("is_primary", False)
     pr = goal.get("priority", 1)
     status = goal.get("status", "active")
-    deadline = goal.get("deadline") or "Без дедлайна"
+    deadline = goal.get("deadline") or "—"
 
     text = (
         f"{icon} <b>{title}</b>\n\n"
         f"💰 {format_amount(saved)} / {format_amount(total)}\n"
-        f"📈 Прогресс: <b>{percent}%</b>\n"
+        f"📈 {t('label.progress', lang)}: <b>{percent}%</b>\n"
         f"{bar}\n"
         f"{SEPARATOR}\n"
-        f"⭐ Основная: {'Да' if is_primary else 'Нет'}\n"
-        f"🔢 Приоритет: {pr}\n"
-        f"📅 Дедлайн: {format_date(deadline)}\n"
+        f"{t('goals.detail.primary', lang)}: {t('common.yes', lang) if is_primary else t('common.no', lang)}\n"
+        f"{t('goals.detail.priority', lang)}: {pr}\n"
+        f"{t('goals.detail.deadline', lang)}: {format_date(deadline)}\n"
     )
 
-    markup = goal_manage_keyboard(goal_id, is_primary, status)
+    markup = goal_manage_keyboard(goal_id, is_primary, status, lang)
 
     # Если это callback
     if isinstance(event, types.CallbackQuery):

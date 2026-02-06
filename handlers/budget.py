@@ -5,12 +5,13 @@ from datetime import date
 from rpc import rpc, RPCError, RPCTransportError
 from keyboards.keyboards import back_button
 from ui.formatting import header, money_line
+from i18n import t
 
 router = Router()
 
 
 @router.callback_query(F.data == "menu_budget")
-async def show_budget(cb: types.CallbackQuery):
+async def show_budget(cb: types.CallbackQuery, lang: str | None = None):
     today = date.today()
     month_str = today.strftime("%Y-%m")
 
@@ -22,14 +23,14 @@ async def show_budget(cb: types.CallbackQuery):
         })
     except RPCTransportError:
         await cb.message.edit_text(
-            "⚠️ Сервис недоступен. Попробуй позже.",
-            reply_markup=back_button()
+            t("budget.error.service_unavailable", lang),
+            reply_markup=back_button(lang)
         )
         return await cb.answer()
     except RPCError:
         await cb.message.edit_text(
-            "⚠️ Не удалось получить бюджет. Попробуй позже.",
-            reply_markup=back_button()
+            t("budget.error.failed", lang),
+            reply_markup=back_button(lang)
         )
         return await cb.answer()
 
@@ -38,19 +39,19 @@ async def show_budget(cb: types.CallbackQuery):
     daily_limit = float(budget.get("recommended_daily_limit", 0))
 
     text = (
-        header(f"Бюджет · {budget.get('month')}", "budget")
+        header(t("budget.title", lang, month=budget.get("month")), "budget")
         + "\n\n"
-        + money_line("Доходы", income, "income")
+        + money_line(t("label.budget_incomes", lang), income, "income")
         + "\n"
-        + money_line("Расходы", expenses, "expense")
+        + money_line(t("label.budget_expenses", lang), expenses, "expense")
         + "\n"
-        + money_line("Дневной лимит", daily_limit, "progress")
+        + money_line(t("label.daily_limit", lang), daily_limit, "progress")
         + "\n\n"
-        + "Это ориентир, чтобы тратить спокойно и без стресса."
+        + t("budget.footer", lang)
     )
 
     await cb.message.edit_text(
         text,
-        reply_markup=back_button()
+        reply_markup=back_button(lang)
     )
     await cb.answer()

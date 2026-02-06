@@ -1,7 +1,7 @@
 # rpc.py
 import httpx
 import logging
-from config import RPC_URL, RPC_TOKEN, TELEGRAM_REGISTER_URL, TELEGRAM_STATUS_URL
+from config import RPC_URL, RPC_TOKEN, TELEGRAM_REGISTER_URL, TELEGRAM_STATUS_URL, TELEGRAM_SET_LANGUAGE_URL
 
 
 class RPCError(RuntimeError):
@@ -148,7 +148,7 @@ async def telegram_register(tg_user_id: int, phone: str, name: str | None = None
     return data
 
 
-async def telegram_status(tg_user_id: int) -> bool:
+async def telegram_status(tg_user_id: int) -> dict:
     payload = {"tg_user_id": tg_user_id}
     try:
         async with httpx.AsyncClient(timeout=20) as client:
@@ -185,4 +185,49 @@ async def telegram_status(tg_user_id: int) -> bool:
         )
         raise RPCTransportError(f"HTTP {resp.status_code}")
 
-    return bool(data.get("registered"))
+    return {
+        "registered": bool(data.get("registered")),
+        "language": data.get("language"),
+    }
+
+
+async def telegram_set_language(tg_user_id: int, language: str) -> dict:
+    payload = {"tg_user_id": tg_user_id, "language": language}
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.post(
+                TELEGRAM_SET_LANGUAGE_URL,
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {RPC_TOKEN}",
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+            )
+    except httpx.RequestError as e:
+        logging.exception("Set language transport error")
+        raise RPCTransportError(str(e))
+
+    try:
+        data = resp.json()
+    except ValueError:
+        logging.error(
+            "Set language non-json response: status=%s body=%s payload={tg_user_id=%s, language=%s}",
+            resp.status_code,
+            resp.text[:2000],
+            tg_user_id,
+            language,
+        )
+        raise RPCTransportError(f"HTTP {resp.status_code}")
+
+    if resp.status_code >= 400 or data.get("status") != "ok":
+        logging.error(
+            "Set language error: status=%s body=%s payload={tg_user_id=%s, language=%s}",
+            resp.status_code,
+            data,
+            tg_user_id,
+            language,
+        )
+        raise RPCTransportError(f"HTTP {resp.status_code}")
+
+    return data

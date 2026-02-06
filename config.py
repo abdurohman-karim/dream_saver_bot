@@ -7,5 +7,6 @@ RPC_TOKEN = os.getenv("RPC_TOKEN", "your_secret_token")
 
 TELEGRAM_REGISTER_URL = f"{BACKEND_BASE_URL}/telegram/register"
 TELEGRAM_STATUS_URL = f"{BACKEND_BASE_URL}/telegram/status"
+TELEGRAM_SET_LANGUAGE_URL = f"{BACKEND_BASE_URL}/telegram/set-language"
 
 BOT_TOKEN = "8308593226:AAH4leywDJwk2s_m9uiDBfMJdqyxseaOmxM"
