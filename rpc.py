@@ -89,13 +89,18 @@ async def rpc(method: str, params: dict | None = None) -> dict:
 
     data = resp.json()
     logging.debug("RPC %s → %s", method, data)
+    if method.startswith("ai."):
+        logging.info("AI RPC raw response: %s", data)
 
     if "error" in data and data["error"]:
         raise RPCError(data["error"])
 
     # result может отсутствовать (если сервер так сделал),
     # тогда вернём весь data — но твой бекенд всегда даёт result.
-    return data.get("result") or data
+    result = data.get("result") or data
+    if method.startswith("ai."):
+        logging.info("AI RPC parsed result: %s", result)
+    return result
 
 
 async def telegram_register(tg_user_id: int, phone: str, name: str | None = None) -> dict:

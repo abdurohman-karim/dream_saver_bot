@@ -1,4 +1,5 @@
 import re
+import json
 from datetime import datetime
 from typing import Optional
 
@@ -42,7 +43,29 @@ def format_datetime(dt_str: str) -> str:
         return dt_str
 
 
-def clean_text(text: str, max_len: int = 120) -> str:
+def clean_text(text, max_len: int = 120) -> str:
+    if text is None:
+        return ""
+    if not isinstance(text, str):
+        try:
+            if isinstance(text, dict):
+                lines = []
+                for key, value in text.items():
+                    if isinstance(value, (dict, list)):
+                        value = json.dumps(value, ensure_ascii=False)
+                    else:
+                        value = "" if value is None else str(value)
+                    if key:
+                        lines.append(f"{key}\n{value}".strip())
+                    elif value:
+                        lines.append(str(value))
+                text = "\n".join([line for line in lines if line])
+            elif isinstance(text, list):
+                text = "\n".join([str(item) for item in text if item is not None])
+            else:
+                text = str(text)
+        except Exception:
+            text = str(text)
     if not text:
         return ""
     text = text.strip()
