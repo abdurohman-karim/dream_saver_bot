@@ -1,7 +1,14 @@
 # rpc.py
 import httpx
 import logging
-from config import RPC_URL, RPC_TOKEN, TELEGRAM_REGISTER_URL, TELEGRAM_STATUS_URL, TELEGRAM_SET_LANGUAGE_URL
+from config import (
+    RPC_URL,
+    RPC_TOKEN,
+    TELEGRAM_BOT_SECRET,
+    TELEGRAM_REGISTER_URL,
+    TELEGRAM_STATUS_URL,
+    TELEGRAM_SET_LANGUAGE_URL,
+)
 
 
 class RPCError(RuntimeError):
@@ -42,6 +49,19 @@ def _mask_phone(phone: str | None) -> str:
     return f"+***{digits[-4:]}"
 
 
+def _base_headers() -> dict:
+    headers = {
+        "Authorization": f"Bearer {RPC_TOKEN}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+
+    if TELEGRAM_BOT_SECRET:
+        headers["X-Telegram-Bot-Secret"] = TELEGRAM_BOT_SECRET
+
+    return headers
+
+
 async def rpc(method: str, params: dict | None = None) -> dict:
     """
     Универсальный вызов JSON-RPC.
@@ -60,10 +80,7 @@ async def rpc(method: str, params: dict | None = None) -> dict:
             resp = await client.post(
                 RPC_URL,
                 json=payload,
-                headers={
-                    "Authorization": f"Bearer {RPC_TOKEN}",
-                    "Content-Type": "application/json",
-                },
+                headers=_base_headers(),
             )
     except httpx.RequestError as e:
         logging.exception("RPC transport error")
@@ -115,11 +132,7 @@ async def telegram_register(tg_user_id: int, phone: str, name: str | None = None
             resp = await client.post(
                 TELEGRAM_REGISTER_URL,
                 json=payload,
-                headers={
-                    "Authorization": f"Bearer {RPC_TOKEN}",
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                },
+                headers=_base_headers(),
             )
     except httpx.RequestError as e:
         logging.exception("Registration transport error")
@@ -160,11 +173,7 @@ async def telegram_status(tg_user_id: int) -> dict:
             resp = await client.post(
                 TELEGRAM_STATUS_URL,
                 json=payload,
-                headers={
-                    "Authorization": f"Bearer {RPC_TOKEN}",
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                },
+                headers=_base_headers(),
             )
     except httpx.RequestError as e:
         logging.exception("Registration status transport error")
@@ -203,11 +212,7 @@ async def telegram_set_language(tg_user_id: int, language: str) -> dict:
             resp = await client.post(
                 TELEGRAM_SET_LANGUAGE_URL,
                 json=payload,
-                headers={
-                    "Authorization": f"Bearer {RPC_TOKEN}",
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                },
+                headers=_base_headers(),
             )
     except httpx.RequestError as e:
         logging.exception("Set language transport error")

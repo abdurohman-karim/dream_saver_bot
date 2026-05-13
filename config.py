@@ -3,10 +3,11 @@ import os
 BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", "http://localhost:5136/api").rstrip("/")
 
 RPC_URL = f"{BACKEND_BASE_URL}/rpc"
-RPC_TOKEN = os.getenv("RPC_TOKEN", "your_secret_token")
+RPC_TOKEN = os.getenv("RPC_TOKEN", "RQd6Zubz64M36WGdyb3FYV3L16c57661cd787c58f")
+TELEGRAM_BOT_SECRET = os.getenv("TELEGRAM_BOT_WEBHOOK_SECRET", RPC_TOKEN)
 
 TELEGRAM_REGISTER_URL = f"{BACKEND_BASE_URL}/telegram/register"
 TELEGRAM_STATUS_URL = f"{BACKEND_BASE_URL}/telegram/status"
 TELEGRAM_SET_LANGUAGE_URL = f"{BACKEND_BASE_URL}/telegram/set-language"
 
-BOT_TOKEN = "8308593226:AAH4leywDJwk2s_m9uiDBfMJdqyxseaOmxM"
+BOT_TOKEN = "8470897147:AAFhNJsSIXTUR67nvHPqyhMIi6X5_ANcen8"
