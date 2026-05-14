@@ -276,7 +276,7 @@ async def finish_income(cb: types.CallbackQuery, state: FSMContext, lang: str | 
             f"{t('income.save.success', lang, amount=escape_html(format_amount(data['amount'], currency=currency)), category=safe_html_text(data.get('category_label') or data.get('category_value'), 80), date=escape_html(format_date(date_value)))}"
             f"\n{t('income.save.success.footer', lang)}"
         ),
-        reply_markup=await get_main_menu(cb.from_user.id, lang)
+        reply_markup=await get_main_menu(cb.from_user.id, lang, bootstrap={"has_transactions": True})
     )
     await cb.answer()
 
