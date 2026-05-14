@@ -8,6 +8,7 @@ from aiogram.client.default import DefaultBotProperties
 from config import BOT_TOKEN
 from handlers.router import main_router
 from middlewares.registration import RegistrationMiddleware
+from middlewares.currency import CurrencyMiddleware
 from middlewares.language import LanguageMiddleware
 from middlewares.language_selection import LanguageSelectionMiddleware
 
@@ -23,6 +24,9 @@ async def main():
         default=DefaultBotProperties(parse_mode="HTML"),
     )
     dp = Dispatcher()
+
+    dp.message.middleware(CurrencyMiddleware())
+    dp.callback_query.middleware(CurrencyMiddleware())
 
     dp.message.middleware(LanguageMiddleware())
     dp.callback_query.middleware(LanguageMiddleware())

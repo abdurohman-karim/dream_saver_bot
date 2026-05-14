@@ -82,7 +82,7 @@ async def insights_trend(cb: types.CallbackQuery, lang: str | None = None):
 
 
 @router.callback_query(F.data == "insights_savings")
-async def insights_savings(cb: types.CallbackQuery, lang: str | None = None):
+async def insights_savings(cb: types.CallbackQuery, lang: str | None = None, currency: dict | None = None):
     try:
         res = await rpc("goal.list", {"tg_user_id": cb.from_user.id})
     except (RPCError, RPCTransportError):
@@ -102,16 +102,32 @@ async def insights_savings(cb: types.CallbackQuery, lang: str | None = None):
         )
         return await cb.answer()
 
-    total_saved = sum(float(g.get("amount_saved") or 0) for g in goals)
-    total_target = sum(float(g.get("amount_total") or 0) for g in goals)
-    percent = int((total_saved / total_target) * 100) if total_target else 0
+    grouped: dict[str, dict] = {}
+    for goal in goals:
+        goal_currency = goal.get("currency") or currency
+        code = str((goal_currency or {}).get("code") or "UZS")
+        bucket = grouped.setdefault(code, {
+            "currency": goal_currency,
+            "saved": 0.0,
+            "target": 0.0,
+        })
+        bucket["saved"] += float(goal.get("amount_saved") or 0)
+        bucket["target"] += float(goal.get("amount_total") or 0)
 
-    lines = [
-        money_line(t("label.saved", lang), total_saved, "income"),
-        money_line(t("label.goal", lang), total_target, "goal"),
-        SEPARATOR,
-        f"📈 {t('label.progress', lang)}: <b>{percent}%</b>",
-    ]
+    lines = []
+    for bucket in grouped.values():
+        saved = bucket["saved"]
+        target = bucket["target"]
+        percent = int((saved / target) * 100) if target else 0
+        lines.extend([
+            money_line(t("label.saved", lang), saved, "income", currency=bucket["currency"]),
+            money_line(t("label.goal", lang), target, "goal", currency=bucket["currency"]),
+            f"📈 {t('label.progress', lang)}: <b>{percent}%</b>",
+            SEPARATOR,
+        ])
+
+    if lines and lines[-1] == SEPARATOR:
+        lines.pop()
 
     text = header(t("insights.savings.title", lang), "goal") + "\n\n" + "\n".join(lines)
     await cb.message.edit_text(text, reply_markup=insights_menu(lang))

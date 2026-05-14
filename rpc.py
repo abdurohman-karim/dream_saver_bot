@@ -202,6 +202,7 @@ async def telegram_status(tg_user_id: int) -> dict:
     return {
         "registered": bool(data.get("registered")),
         "language": data.get("language"),
+        "currency": data.get("currency"),
     }
 
 
@@ -241,3 +242,25 @@ async def telegram_set_language(tg_user_id: int, language: str) -> dict:
         raise RPCTransportError(f"HTTP {resp.status_code}")
 
     return data
+
+
+async def currency_list(tg_user_id: int) -> list[dict]:
+    result = await rpc("currency.list", {"tg_user_id": tg_user_id})
+    return result.get("data", []) if isinstance(result, dict) else []
+
+
+async def currency_get(tg_user_id: int) -> dict | None:
+    result = await rpc("currency.get", {"tg_user_id": tg_user_id})
+    if not isinstance(result, dict):
+        return None
+    return result.get("data")
+
+
+async def currency_set(tg_user_id: int, currency_code: str) -> dict | None:
+    result = await rpc("currency.set", {
+        "tg_user_id": tg_user_id,
+        "currency_code": currency_code,
+    })
+    if not isinstance(result, dict):
+        return None
+    return result.get("data")

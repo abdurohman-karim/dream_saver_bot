@@ -13,7 +13,7 @@ router = Router()
 
 
 @router.callback_query(F.data == "menu_today")
-async def show_today_transactions(cb: types.CallbackQuery, lang: str | None = None):
+async def show_today_transactions(cb: types.CallbackQuery, lang: str | None = None, currency: dict | None = None):
     today = date.today().isoformat()
 
     try:
@@ -36,6 +36,8 @@ async def show_today_transactions(cb: types.CallbackQuery, lang: str | None = No
 
     income = float(stats.get("income", 0))
     expense = float(stats.get("expense", 0))
+    selected_currency = stats.get("currency") or currency
+    summary_by_currency = stats.get("summary_by_currency", [])
     items = stats.get("items", [])
 
     if not items:
@@ -53,12 +55,26 @@ async def show_today_transactions(cb: types.CallbackQuery, lang: str | None = No
         header(t("daily.title", lang), "insights")
         + "\n\n"
         + f"{t('daily.date_label', lang)}: <b>{format_date(stats.get('date'))}</b>\n"
-        + money_line(t("label.income", lang), income, "income", sign="+") + "\n"
-        + money_line(t("label.expense", lang), expense, "expense", sign="-") + "\n"
-        + SEPARATOR + "\n"
-        + money_line(t("label.balance", lang), balance, "progress") + "\n\n"
-        + t("daily.operations", lang) + "\n"
     )
+
+    if summary_by_currency:
+        for group in summary_by_currency:
+            group_currency = group.get("currency") or selected_currency
+            text += (
+                money_line(t("label.income", lang), group.get("income", 0), "income", sign="+", currency=group_currency) + "\n"
+                + money_line(t("label.expense", lang), group.get("expense", 0), "expense", sign="-", currency=group_currency) + "\n"
+                + money_line(t("label.balance", lang), group.get("balance", 0), "progress", currency=group_currency) + "\n"
+                + SEPARATOR + "\n"
+            )
+    else:
+        text += (
+            money_line(t("label.income", lang), income, "income", sign="+", currency=selected_currency) + "\n"
+            + money_line(t("label.expense", lang), expense, "expense", sign="-", currency=selected_currency) + "\n"
+            + SEPARATOR + "\n"
+            + money_line(t("label.balance", lang), balance, "progress", currency=selected_currency) + "\n"
+        )
+
+    text += "\n" + t("daily.operations", lang) + "\n"
 
     for item in items:
         amount = float(item["amount"])
@@ -67,7 +83,7 @@ async def show_today_transactions(cb: types.CallbackQuery, lang: str | None = No
         cat = localize_category(raw_cat, lang) or raw_cat
         desc = clean_text(item.get("description") or "", 60)
         dt = format_datetime(item.get("datetime") or "")
-        amount_text = format_amount(abs(amount))
+        amount_text = format_amount(abs(amount), currency=item.get("currency") or selected_currency)
         line = f"{sign} <b>{amount_text}</b> — {cat}"
         if dt:
             line += f" · {dt}"

@@ -29,8 +29,8 @@ def line(label: str, value: str, emoji_key: str | None = None) -> str:
     return f"{prefix}{label}: <b>{value}</b>"
 
 
-def money_line(label: str, amount, emoji_key: str | None = None, sign: str | None = None) -> str:
-    return line(label, format_amount(amount, sign=sign), emoji_key=emoji_key)
+def money_line(label: str, amount, emoji_key: str | None = None, sign: str | None = None, currency: dict | None = None) -> str:
+    return line(label, format_amount(amount, currency=currency, sign=sign), emoji_key=emoji_key)
 
 
 def section(title: str, lines: list[str], emoji_key: str | None = None, footer: str | None = None) -> str:

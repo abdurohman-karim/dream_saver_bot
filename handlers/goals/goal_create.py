@@ -8,7 +8,7 @@ from states.goals import GoalStates
 from keyboards.keyboards import cancel_button
 from keyboards.deadline import deadline_keyboard
 from rpc import rpc, RPCError, RPCTransportError
-from utils.ui import parse_amount, format_amount, format_date
+from utils.ui import parse_amount, format_amount, format_date, currency_label
 from ui.menus import get_main_menu
 from i18n import t
 
@@ -22,7 +22,7 @@ async def safe_delete(message: types.Message):
         pass
 
 
-async def render_create_window(cb_or_msg, state: FSMContext, lang: str | None = None):
+async def render_create_window(cb_or_msg, state: FSMContext, lang: str | None = None, currency: dict | None = None):
     data = await state.get_data()
 
     title = data.get("title", "—")
@@ -30,7 +30,7 @@ async def render_create_window(cb_or_msg, state: FSMContext, lang: str | None = 
     deadline = data.get("deadline", "—")
 
     if isinstance(amount, int):
-        amount_fmt = format_amount(amount)
+        amount_fmt = format_amount(amount, currency=currency)
     else:
         amount_fmt = amount
 
@@ -51,7 +51,7 @@ async def render_create_window(cb_or_msg, state: FSMContext, lang: str | None = 
     )
 
 
-async def finish_goal_create(cb_or_msg, state: FSMContext, lang: str | None = None):
+async def finish_goal_create(cb_or_msg, state: FSMContext, lang: str | None = None, currency: dict | None = None):
     data = await state.get_data()
 
     payload = {
@@ -79,7 +79,7 @@ async def finish_goal_create(cb_or_msg, state: FSMContext, lang: str | None = No
 
     await state.clear()
 
-    amount_fmt = format_amount(data["amount_total"])
+    amount_fmt = format_amount(data["amount_total"], currency=currency)
 
     text = t(
         "goals.create.success",
@@ -96,7 +96,7 @@ async def finish_goal_create(cb_or_msg, state: FSMContext, lang: str | None = No
 
 
 @router.callback_query(F.data == "menu_newgoal")
-async def new_goal_start(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
+async def new_goal_start(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None, currency: dict | None = None):
     await state.set_state(GoalStates.waiting_for_title)
 
     sent = await cb.message.edit_text(
@@ -109,7 +109,7 @@ async def new_goal_start(cb: types.CallbackQuery, state: FSMContext, lang: str |
 
 
 @router.message(GoalStates.waiting_for_title)
-async def set_title(message: types.Message, state: FSMContext, lang: str | None = None):
+async def set_title(message: types.Message, state: FSMContext, lang: str | None = None, currency: dict | None = None):
     title = message.text.strip()
     if len(title) < 2:
         await safe_delete(message)
@@ -120,12 +120,12 @@ async def set_title(message: types.Message, state: FSMContext, lang: str | None 
 
     await state.set_state(GoalStates.waiting_for_amount)
 
-    await render_create_window(message, state, lang)
-    await message.answer(t("goals.create.ask_amount", lang))
+    await render_create_window(message, state, lang, currency)
+    await message.answer(t("goals.create.ask_amount", lang, currency=currency_label(currency)))
 
 
 @router.message(GoalStates.waiting_for_amount)
-async def set_amount(message: types.Message, state: FSMContext, lang: str | None = None):
+async def set_amount(message: types.Message, state: FSMContext, lang: str | None = None, currency: dict | None = None):
     amount = parse_amount(message.text)
     if amount is None:
         await safe_delete(message)
@@ -135,7 +135,7 @@ async def set_amount(message: types.Message, state: FSMContext, lang: str | None
 
     await state.set_state(GoalStates.waiting_for_deadline)
 
-    await render_create_window(message, state, lang)
+    await render_create_window(message, state, lang, currency)
     await message.answer(
         t("goals.create.ask_deadline", lang),
         reply_markup=deadline_keyboard(lang)
@@ -146,22 +146,22 @@ async def set_amount(message: types.Message, state: FSMContext, lang: str | None
     StateFilter(GoalStates.waiting_for_deadline),
     F.data.regexp(r"^deadline_\d{4}-\d{2}-\d{2}$")
 )
-async def choose_deadline(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
+async def choose_deadline(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None, currency: dict | None = None):
     raw = cb.data.replace("deadline_", "")
     await state.update_data(deadline=raw)
 
     await cb.answer()
-    return await finish_goal_create(cb, state, lang)
+    return await finish_goal_create(cb, state, lang, currency)
 
 
 @router.callback_query(
     StateFilter(GoalStates.waiting_for_deadline),
     F.data == "deadline_none"
 )
-async def no_deadline(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
+async def no_deadline(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None, currency: dict | None = None):
     await state.update_data(deadline=None)
     await cb.answer()
-    return await finish_goal_create(cb, state, lang)
+    return await finish_goal_create(cb, state, lang, currency)
 
 
 @router.callback_query(
@@ -179,7 +179,7 @@ async def manual_deadline_start(cb: types.CallbackQuery, state: FSMContext, lang
 
 
 @router.message(StateFilter(GoalStates.waiting_for_manual_deadline))
-async def manual_deadline_input(message: types.Message, state: FSMContext, lang: str | None = None):
+async def manual_deadline_input(message: types.Message, state: FSMContext, lang: str | None = None, currency: dict | None = None):
     raw = message.text.strip()
 
     try:
@@ -191,4 +191,4 @@ async def manual_deadline_input(message: types.Message, state: FSMContext, lang:
     await safe_delete(message)
     await state.update_data(deadline=str(deadline))
 
-    return await finish_goal_create(message, state, lang)
+    return await finish_goal_create(message, state, lang, currency)

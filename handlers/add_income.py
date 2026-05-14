@@ -161,8 +161,8 @@ async def income_description(message: types.Message, state: FSMContext, lang: st
 
 
 @router.callback_query(F.data == "inc_date_today")
-async def choose_today_income(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
-    await prepare_income_confirmation(cb, state, date.today().isoformat(), lang)
+async def choose_today_income(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None, currency: dict | None = None):
+    await prepare_income_confirmation(cb, state, date.today().isoformat(), lang, currency)
 
 
 @router.callback_query(F.data == "inc_date_manual")
@@ -182,13 +182,13 @@ async def manual_date_income(cb: types.CallbackQuery, state: FSMContext, lang: s
 
 
 @router.message(IncomeStates.waiting_for_date)
-async def manual_date_income_enter(message: types.Message, state: FSMContext, lang: str | None = None):
+async def manual_date_income_enter(message: types.Message, state: FSMContext, lang: str | None = None, currency: dict | None = None):
     date_value = message.text.strip()
     try:
         datetime.strptime(date_value, "%Y-%m-%d")
     except ValueError:
         return await message.answer(t("income.date.invalid", lang))
-    await prepare_income_confirmation(message, state, date_value, lang)
+    await prepare_income_confirmation(message, state, date_value, lang, currency)
 
 
 
@@ -200,12 +200,12 @@ def confirm_keyboard(lang: str | None = None):
     return kb.as_markup()
 
 
-async def prepare_income_confirmation(obj, state: FSMContext, date_value: str, lang: str | None = None):
+async def prepare_income_confirmation(obj, state: FSMContext, date_value: str, lang: str | None = None, currency: dict | None = None):
     data = await state.get_data()
     await state.update_data(date=date_value)
     await state.set_state(IncomeStates.waiting_for_confirm)
 
-    amount_text = format_amount(data["amount"])
+    amount_text = format_amount(data["amount"], currency=currency)
     category = data.get("category_label") or data.get("category_value")
     description = clean_text(data.get("description") or "—", 120)
     date_text = format_date(date_value)
@@ -230,7 +230,7 @@ async def prepare_income_confirmation(obj, state: FSMContext, date_value: str, l
 
 
 @router.callback_query(IncomeStates.waiting_for_confirm, F.data == "income_confirm")
-async def finish_income(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
+async def finish_income(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None, currency: dict | None = None):
     data = await state.get_data()
     date_value = data.get("date")
 
@@ -261,7 +261,7 @@ async def finish_income(cb: types.CallbackQuery, state: FSMContext, lang: str | 
         chat_id=cb.message.chat.id,
         message_id=bot_message_id,
         text=(
-            f"{t('income.save.success', lang, amount=format_amount(data['amount']), category=data.get('category_label') or data.get('category_value'), date=format_date(date_value))}"
+            f"{t('income.save.success', lang, amount=format_amount(data['amount'], currency=currency), category=data.get('category_label') or data.get('category_value'), date=format_date(date_value))}"
             f"\n{t('income.save.success.footer', lang)}"
         ),
         reply_markup=await get_main_menu(cb.from_user.id, lang)

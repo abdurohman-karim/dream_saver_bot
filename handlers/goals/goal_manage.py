@@ -8,7 +8,7 @@ from rpc import rpc, RPCError, RPCTransportError
 from keyboards.goals_manage import goals_list_keyboard, goal_manage_keyboard
 from states.goals import DepositGoal
 from ui.menus import get_main_menu
-from utils.ui import format_amount, format_date
+from utils.ui import format_amount, format_date, normalize_currency
 from ui.formatting import SEPARATOR
 from i18n import t
 
@@ -75,7 +75,7 @@ async def menu_goals(cb: types.CallbackQuery, lang: str | None = None):
 
 
 @router.callback_query(F.data.startswith("goal_manage_"))
-async def goal_manage(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
+async def goal_manage(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None, currency: dict | None = None):
     goal_id = int(cb.data.split("_")[-1])
     user_id = cb.from_user.id
     await state.clear()
@@ -106,7 +106,7 @@ async def goal_manage(cb: types.CallbackQuery, state: FSMContext, lang: str | No
 
     text = (
         f"{icon} <b>{title}</b>\n\n"
-        f"💰 {format_amount(saved)} / {format_amount(total)}\n"
+        f"💰 {format_amount(saved, currency=goal.get('currency') or currency)} / {format_amount(total, currency=goal.get('currency') or currency)}\n"
         f"📈 {t('label.progress', lang)}: <b>{percent}%</b>\n"
         f"{bar}\n"
         f"{SEPARATOR}\n"
@@ -152,10 +152,22 @@ async def priority_down(cb: types.CallbackQuery, lang: str | None = None):
 
 
 @router.callback_query(F.data.regexp(r"^goal_deposit_\d+$"))
-async def deposit_start(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
+async def deposit_start(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None, currency: dict | None = None):
     goal_id = int(cb.data.split("_")[-1])
+    goal_currency = currency
 
-    await state.update_data(goal_id=goal_id, bot_message_id=cb.message.message_id)
+    try:
+        result = await rpc("goal.get", {"tg_user_id": cb.from_user.id, "goal_id": goal_id})
+        goal = result.get("result") or result
+        goal_currency = goal.get("currency") or currency
+    except (RPCError, RPCTransportError):
+        goal_currency = currency
+
+    await state.update_data(
+        goal_id=goal_id,
+        bot_message_id=cb.message.message_id,
+        goal_currency=normalize_currency(goal_currency) if goal_currency else None,
+    )
 
     await cb.message.edit_text(
         t("goals.manage.deposit_prompt", lang),
@@ -210,7 +222,7 @@ async def reopen_goal(cb: types.CallbackQuery, lang: str | None = None):
 
 
 @router.message(DepositGoal.waiting_for_amount)
-async def deposit_amount_handler(message: types.Message, state: FSMContext, lang: str | None = None):
+async def deposit_amount_handler(message: types.Message, state: FSMContext, lang: str | None = None, currency: dict | None = None):
     text = message.text.replace(" ", "").replace(",", ".")
 
     try:
@@ -222,6 +234,7 @@ async def deposit_amount_handler(message: types.Message, state: FSMContext, lang
 
     data = await state.get_data()
     goal_id = data["goal_id"]
+    goal_currency = data.get("goal_currency") or currency
 
     try:
         await message.delete()
@@ -238,7 +251,7 @@ async def deposit_amount_handler(message: types.Message, state: FSMContext, lang
             message_id=bot_msg_id,
             text=(
                 f"{t('goals.manage.deposit_confirm_title', lang)}\n\n"
-                f"💰 {t('label.amount', lang)}: <b>{format_amount(amount)}</b>\n"
+                f"💰 {t('label.amount', lang)}: <b>{format_amount(amount, currency=goal_currency)}</b>\n"
                 f"{t('goals.manage.deposit_confirm_question', lang)}"
             ),
             reply_markup=deposit_confirm_keyboard(goal_id, lang)
@@ -273,7 +286,7 @@ async def deposit_confirm(cb: types.CallbackQuery, state: FSMContext, lang: str 
     await render_goal(cb, goal_id, rpc_result=result, lang=lang)
 
 
-async def render_goal(event: types.Message | types.CallbackQuery, goal_id: int, rpc_result=None, lang: str | None = None):
+async def render_goal(event: types.Message | types.CallbackQuery, goal_id: int, rpc_result=None, lang: str | None = None, currency: dict | None = None):
     user_id = event.from_user.id
 
     if rpc_result:
@@ -306,7 +319,7 @@ async def render_goal(event: types.Message | types.CallbackQuery, goal_id: int, 
 
     text = (
         f"{icon} <b>{title}</b>\n\n"
-        f"💰 {format_amount(saved)} / {format_amount(total)}\n"
+        f"💰 {format_amount(saved, currency=goal.get('currency') or currency)} / {format_amount(total, currency=goal.get('currency') or currency)}\n"
         f"📈 {t('label.progress', lang)}: <b>{percent}%</b>\n"
         f"{bar}\n"
         f"{SEPARATOR}\n"

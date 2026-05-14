@@ -16,7 +16,7 @@ router = Router()
 
 
 @router.callback_query(F.data == "menu_smart")
-async def smart_save(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
+async def smart_save(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None, currency: dict | None = None):
     try:
         res = await rpc("smart.save.run", {
             "tg_user_id": cb.from_user.id,
@@ -39,6 +39,7 @@ async def smart_save(cb: types.CallbackQuery, state: FSMContext, lang: str | Non
     if status == "preview":
         goal = res.get("goal", {})
         amount = res.get("safe_save")
+        active_currency = res.get("currency") or goal.get("currency") or currency
         if not amount or not goal:
             await cb.message.edit_text(
                 t("smart.status.generic", lang),
@@ -56,7 +57,7 @@ async def smart_save(cb: types.CallbackQuery, state: FSMContext, lang: str | Non
         text = (
             header(t("smart.title", lang), "smart")
             + "\n\n"
-            + f"💡 {t('smart.confirm.offer', lang, amount=f'<b>{format_amount(amount)}</b>')}\n"
+            + f"💡 {t('smart.confirm.offer', lang, amount=f'<b>{format_amount(amount, currency=active_currency)}</b>')}\n"
             + f"🎯 {t('label.goal', lang)}: <b>{goal.get('title', '—')}</b>\n"
             + f"{SEPARATOR}\n"
             + f"{t('smart.confirm.note', lang)}\n\n"
@@ -90,6 +91,7 @@ async def smart_save(cb: types.CallbackQuery, state: FSMContext, lang: str | Non
             "already_saved": t("smart.status.already_saved", lang),
             "insufficient_balance": t("smart.status.insufficient_balance", lang),
             "goal_completed": t("smart.status.goal_completed", lang),
+            "currency_mismatch": t("smart.status.currency_mismatch", lang),
         }
         message = status_map.get(status, t("smart.status.generic", lang))
         await cb.message.edit_text(
@@ -105,7 +107,7 @@ async def smart_save(cb: types.CallbackQuery, state: FSMContext, lang: str | Non
     text = (
         header(t("smart.title", lang), "smart")
         + "\n\n"
-        + money_line(t("smart.saved_label", lang), deposited, "income")
+        + money_line(t("smart.saved_label", lang), deposited, "income", currency=res.get("currency") or goal.get("currency") or currency)
         + "\n"
         + t(
             "smart.success.progress_line",
@@ -141,11 +143,12 @@ def render_fallback_prompt(data: dict, lang: str | None = None) -> str:
     amount = data["amount"]
     goal = data["goal"]
     note = data["note"]
+    active_currency = data.get("currency") or goal.get("currency")
 
     return (
         header(t("smart.title", lang), "smart")
         + "\n\n"
-        + f"💡 {t('smart.fallback.offer', lang, amount=f'<b>{format_amount(amount)}</b>')}\n"
+        + f"💡 {t('smart.fallback.offer', lang, amount=f'<b>{format_amount(amount, currency=active_currency)}</b>')}\n"
         + f"🎯 {t('label.goal', lang)}: <b>{goal.get('title', '—')}</b>\n"
         + f"{SEPARATOR}\n"
         + f"{note}\n\n"
@@ -154,7 +157,7 @@ def render_fallback_prompt(data: dict, lang: str | None = None) -> str:
 
 
 @router.callback_query(SmartSaveFallback.waiting_for_confirm, F.data == "smart_fallback_confirm")
-async def smart_fallback_confirm(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
+async def smart_fallback_confirm(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None, currency: dict | None = None):
     data = await state.get_data()
     amount = data.get("amount")
     goal_id = data.get("goal_id")
@@ -186,7 +189,7 @@ async def smart_fallback_confirm(cb: types.CallbackQuery, state: FSMContext, lan
     text = (
         header(t("smart.title", lang), "smart")
         + "\n\n"
-        + money_line(t("smart.saved_label", lang), amount, "income")
+        + money_line(t("smart.saved_label", lang), amount, "income", currency=goal.get("currency") or currency)
         + "\n"
         + f"🎯 {t('label.goal', lang)}: <b>{goal.get('title', '—')}</b>\n"
         + f"📊 {t('label.progress', lang)}: <b>{goal.get('progress', 0)}%</b>\n\n"
@@ -199,7 +202,7 @@ async def smart_fallback_confirm(cb: types.CallbackQuery, state: FSMContext, lan
 
 
 @router.callback_query(SmartSaveConfirm.waiting_for_confirm, F.data == "smart_confirm")
-async def smart_confirm(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
+async def smart_confirm(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None, currency: dict | None = None):
     data = await state.get_data()
     amount = data.get("amount")
     goal_id = data.get("goal_id")
@@ -256,6 +259,14 @@ async def smart_confirm(cb: types.CallbackQuery, state: FSMContext, lang: str | 
         )
         return
 
+    if status == "currency_mismatch":
+        await state.clear()
+        await cb.message.edit_text(
+            f"ℹ️ {t('smart.status.currency_mismatch', lang)}",
+            reply_markup=await get_main_menu(cb.from_user.id, lang)
+        )
+        return
+
     if status not in {"ok", "success"}:
         await state.clear()
         await cb.message.edit_text(
@@ -271,7 +282,7 @@ async def smart_confirm(cb: types.CallbackQuery, state: FSMContext, lang: str | 
     text = (
         header(t("smart.title", lang), "smart")
         + "\n\n"
-        + money_line(t("smart.saved_label", lang), deposited, "income")
+        + money_line(t("smart.saved_label", lang), deposited, "income", currency=res.get("currency") or goal.get("currency") or currency)
         + "\n"
         + t(
             "smart.success.progress_line",
@@ -285,6 +296,7 @@ async def smart_confirm(cb: types.CallbackQuery, state: FSMContext, lang: str | 
 
     await state.clear()
     await cb.message.edit_text(text, reply_markup=await get_main_menu(cb.from_user.id, lang))
+    await cb.answer()
 
 
 async def build_fallback_smart_save(tg_user_id: int, res: dict, lang: str | None = None) -> dict | None:
@@ -317,7 +329,8 @@ async def build_fallback_smart_save(tg_user_id: int, res: dict, lang: str | None
     if safe_amount <= 0:
         return None
 
-    goal = await select_fallback_goal(tg_user_id)
+    target_currency = (res.get("currency") or {}).get("code")
+    goal = await select_fallback_goal(tg_user_id, target_currency)
     if not goal:
         return None
 
@@ -331,16 +344,22 @@ async def build_fallback_smart_save(tg_user_id: int, res: dict, lang: str | None
         "amount": safe_amount,
         "goal": goal,
         "note": note,
+        "currency": budget.get("currency") or goal.get("currency"),
     }
 
 
-async def select_fallback_goal(tg_user_id: int) -> dict | None:
+async def select_fallback_goal(tg_user_id: int, currency_code: str | None = None) -> dict | None:
     try:
         goals_res = await rpc("goal.list", {"tg_user_id": tg_user_id})
     except (RPCError, RPCTransportError):
         return None
 
     goals = goals_res.get("goals", [])
+    if currency_code:
+        goals = [
+            goal for goal in goals
+            if str(((goal.get("currency") or {}).get("code") or "")).upper() == str(currency_code).upper()
+        ]
     if not goals:
         return None
 

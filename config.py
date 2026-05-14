@@ -1,6 +1,6 @@
 import os
 
-BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", "https://lunex.my/api").rstrip("/")
+BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", "http://localhost:5136/api").rstrip("/")
 
 RPC_URL = f"{BACKEND_BASE_URL}/rpc"
 RPC_TOKEN = os.getenv("RPC_TOKEN", "RQd6Zubz64M36WGdyb3FYV3L16c57661cd787c58f")
@@ -10,4 +10,4 @@ TELEGRAM_REGISTER_URL = f"{BACKEND_BASE_URL}/telegram/register"
 TELEGRAM_STATUS_URL = f"{BACKEND_BASE_URL}/telegram/status"
 TELEGRAM_SET_LANGUAGE_URL = f"{BACKEND_BASE_URL}/telegram/set-language"
 
-BOT_TOKEN = "8470897147:AAFhNJsSIXTUR67nvHPqyhMIi6X5_ANcen8"
+BOT_TOKEN = "5978539787:AAGBG5__KP9R8MWNWGI0RrZka2MWIkYul5M"

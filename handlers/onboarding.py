@@ -103,10 +103,10 @@ async def onboarding_focus(cb: types.CallbackQuery, state: FSMContext, lang: str
 
 
 @router.callback_query(F.data == "onb_goal_create")
-async def onboarding_goal_create(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
+async def onboarding_goal_create(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None, currency: dict | None = None):
     await state.clear()
     await cb.answer()
-    return await new_goal_start(cb, state, lang=lang)
+    return await new_goal_start(cb, state, lang=lang, currency=currency)
 
 
 @router.callback_query(F.data == "onb_goal_skip")
@@ -136,7 +136,7 @@ async def onboarding_expense_add(cb: types.CallbackQuery, state: FSMContext, lan
 
 
 @router.callback_query(F.data == "onb_finish")
-async def onboarding_finish(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
+async def onboarding_finish(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None, currency: dict | None = None):
     await state.clear()
 
     today = date.today().isoformat()
@@ -150,10 +150,10 @@ async def onboarding_finish(cb: types.CallbackQuery, state: FSMContext, lang: st
     balance = float(income) - float(expense)
 
     lines = [
-        money_line(t("label.income", lang), income, "income", sign="+"),
-        money_line(t("label.expense", lang), expense, "expense", sign="-"),
+        money_line(t("label.income", lang), income, "income", sign="+", currency=daily.get("currency") or currency),
+        money_line(t("label.expense", lang), expense, "expense", sign="-", currency=daily.get("currency") or currency),
         SEPARATOR,
-        money_line(t("label.balance", lang), balance, "progress"),
+        money_line(t("label.balance", lang), balance, "progress", currency=daily.get("currency") or currency),
     ]
 
     text = header(t("onboarding.finish.title", lang), "insights") + "\n\n" + "\n".join(lines)

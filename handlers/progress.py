@@ -11,7 +11,7 @@ router = Router()
 
 
 @router.callback_query(F.data == "menu_progress")
-async def menu_progress(cb: types.CallbackQuery, lang: str | None = None):
+async def menu_progress(cb: types.CallbackQuery, lang: str | None = None, currency: dict | None = None):
     user_id = cb.from_user.id
 
     try:
@@ -40,7 +40,7 @@ async def menu_progress(cb: types.CallbackQuery, lang: str | None = None):
 
         text += (
             f"🎯 <b>{g['title']}</b>\n"
-            f"💰 {t('label.saved', lang)}: <b>{format_amount(saved)}</b> / {format_amount(total)}\n"
+            f"💰 {t('label.saved', lang)}: <b>{format_amount(saved, currency=g.get('currency') or currency)}</b> / {format_amount(total, currency=g.get('currency') or currency)}\n"
             f"📈 {t('label.progress', lang)}: <b>{percent}%</b>\n"
             f"{SEPARATOR}\n"
         )

@@ -11,7 +11,7 @@ router = Router()
 
 
 @router.callback_query(F.data == "menu_budget")
-async def show_budget(cb: types.CallbackQuery, lang: str | None = None):
+async def show_budget(cb: types.CallbackQuery, lang: str | None = None, currency: dict | None = None):
     today = date.today()
     month_str = today.strftime("%Y-%m")
 
@@ -37,15 +37,16 @@ async def show_budget(cb: types.CallbackQuery, lang: str | None = None):
     income = float(budget.get("income", 0))
     expenses = float(budget.get("expenses", 0))
     daily_limit = float(budget.get("recommended_daily_limit", 0))
+    budget_currency = budget.get("currency") or currency
 
     text = (
         header(t("budget.title", lang, month=budget.get("month")), "budget")
         + "\n\n"
-        + money_line(t("label.budget_incomes", lang), income, "income")
+        + money_line(t("label.budget_incomes", lang), income, "income", currency=budget_currency)
         + "\n"
-        + money_line(t("label.budget_expenses", lang), expenses, "expense")
+        + money_line(t("label.budget_expenses", lang), expenses, "expense", currency=budget_currency)
         + "\n"
-        + money_line(t("label.daily_limit", lang), daily_limit, "progress")
+        + money_line(t("label.daily_limit", lang), daily_limit, "progress", currency=budget_currency)
         + "\n\n"
         + t("budget.footer", lang)
     )

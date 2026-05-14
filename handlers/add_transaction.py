@@ -136,8 +136,8 @@ def date_keyboard(lang: str | None = None):
 
 
 @router.callback_query(F.data == "date_today")
-async def choose_today(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
-    await prepare_confirmation(cb, state, date.today().isoformat(), lang)
+async def choose_today(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None, currency: dict | None = None):
+    await prepare_confirmation(cb, state, date.today().isoformat(), lang, currency)
 
 
 @router.callback_query(F.data == "date_manual")
@@ -157,14 +157,14 @@ async def date_manual(cb: types.CallbackQuery, state: FSMContext, lang: str | No
 
 
 @router.message(TransactionStates.waiting_for_date_manual)
-async def save_manual(message: types.Message, state: FSMContext, lang: str | None = None):
+async def save_manual(message: types.Message, state: FSMContext, lang: str | None = None, currency: dict | None = None):
     await safe_delete(message)
     date_value = message.text.strip()
     try:
         datetime.strptime(date_value, "%Y-%m-%d")
     except ValueError:
         return await message.answer(t("expense.date.invalid", lang))
-    await prepare_confirmation(message, state, date_value, lang)
+    await prepare_confirmation(message, state, date_value, lang, currency)
 
 
 def confirm_keyboard(lang: str | None = None):
@@ -175,12 +175,12 @@ def confirm_keyboard(lang: str | None = None):
     return kb.as_markup()
 
 
-async def prepare_confirmation(obj, state: FSMContext, date_value: str, lang: str | None = None):
+async def prepare_confirmation(obj, state: FSMContext, date_value: str, lang: str | None = None, currency: dict | None = None):
     data = await state.get_data()
     await state.update_data(date=date_value)
     await state.set_state(TransactionStates.waiting_for_confirm)
 
-    amount_text = format_amount(data["amount"])
+    amount_text = format_amount(data["amount"], currency=currency)
     category = data.get("category_label") or data.get("category_value")
     description = clean_text(data.get("description") or "—", 120)
     date_text = format_date(date_value)
@@ -205,7 +205,7 @@ async def prepare_confirmation(obj, state: FSMContext, date_value: str, lang: st
 
 
 @router.callback_query(TransactionStates.waiting_for_confirm, F.data == "expense_confirm")
-async def finish_expense(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
+async def finish_expense(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None, currency: dict | None = None):
     data = await state.get_data()
     date_value = data.get("date")
 
@@ -235,7 +235,7 @@ async def finish_expense(cb: types.CallbackQuery, state: FSMContext, lang: str |
         chat_id=cb.message.chat.id,
         message_id=bot_msg_id,
         text=(
-            f"{t('expense.save.success', lang, amount=format_amount(data['amount']), category=data.get('category_label') or data.get('category_value'), date=format_date(date_value))}"
+            f"{t('expense.save.success', lang, amount=format_amount(data['amount'], currency=currency), category=data.get('category_label') or data.get('category_value'), date=format_date(date_value))}"
             f"\n{t('expense.save.success.footer', lang)}"
         ),
         reply_markup=await get_main_menu(cb.from_user.id, lang)
