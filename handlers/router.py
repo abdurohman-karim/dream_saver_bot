@@ -3,6 +3,7 @@ from aiogram import Router
 import logging
 
 from .start import router as start_router
+from .errors import router as error_router
 from .smart import router as smart_router
 from .ai import router as ai_router
 from .progress import router as progress_router
@@ -24,6 +25,7 @@ from handlers.goals.goal_manage import router as goals_manage_router
 logging.basicConfig(level=logging.INFO)
 
 main_router = Router()
+main_router.include_router(error_router)
 
 # базовые
 main_router.include_router(start_router)

@@ -2,17 +2,20 @@
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from datetime import date
 import calendar
+import time
 
 from rpc import rpc, RPCError, RPCTransportError
 from ui.menus import get_main_menu
 from ui.formatting import header, money_line, SEPARATOR
 from states.smart_save import SmartSaveFallback, SmartSaveConfirm
-from utils.ui import format_amount
+from utils.ui import format_amount, safe_html_text, escape_html, to_float
 from i18n import t
+from utils.dates import today_local, current_month
+from utils.telegram import safe_edit_text
 
 router = Router()
+PREVIEW_TTL_SECONDS = 15 * 60
 
 
 @router.callback_query(F.data == "menu_smart")
@@ -23,13 +26,15 @@ async def smart_save(cb: types.CallbackQuery, state: FSMContext, lang: str | Non
             "preview": True
         })
     except RPCTransportError:
-        await cb.message.edit_text(
+        await safe_edit_text(
+            cb.message,
             t("smart.error.service_unavailable", lang),
             reply_markup=await get_main_menu(cb.from_user.id, lang)
         )
         return await cb.answer()
     except RPCError:
-        await cb.message.edit_text(
+        await safe_edit_text(
+            cb.message,
             t("smart.error.failed", lang),
             reply_markup=await get_main_menu(cb.from_user.id, lang)
         )
@@ -41,7 +46,8 @@ async def smart_save(cb: types.CallbackQuery, state: FSMContext, lang: str | Non
         amount = res.get("safe_save")
         active_currency = res.get("currency") or goal.get("currency") or currency
         if not amount or not goal:
-            await cb.message.edit_text(
+            await safe_edit_text(
+                cb.message,
                 t("smart.status.generic", lang),
                 reply_markup=await get_main_menu(cb.from_user.id, lang)
             )
@@ -52,19 +58,22 @@ async def smart_save(cb: types.CallbackQuery, state: FSMContext, lang: str | Non
             amount=amount,
             goal_id=goal.get("id"),
             goal_title=goal.get("title"),
+            preview_currency=active_currency,
+            preview_token=res.get("preview_token"),
+            preview_generated_at=int(time.time()),
         )
 
         text = (
             header(t("smart.title", lang), "smart")
             + "\n\n"
-            + f"💡 {t('smart.confirm.offer', lang, amount=f'<b>{format_amount(amount, currency=active_currency)}</b>')}\n"
-            + f"🎯 {t('label.goal', lang)}: <b>{goal.get('title', '—')}</b>\n"
+            + f"💡 {t('smart.confirm.offer', lang, amount=f'<b>{escape_html(format_amount(amount, currency=active_currency))}</b>')}\n"
+            + f"🎯 {t('label.goal', lang)}: <b>{safe_html_text(goal.get('title', '—'), 120)}</b>\n"
             + f"{SEPARATOR}\n"
             + f"{t('smart.confirm.note', lang)}\n\n"
             + t("smart.confirm.question", lang)
         )
 
-        await cb.message.edit_text(text, reply_markup=smart_confirm_keyboard(lang))
+        await safe_edit_text(cb.message, text, reply_markup=smart_confirm_keyboard(lang))
         return await cb.answer()
 
     if status not in {"ok", "success"}:
@@ -76,8 +85,11 @@ async def smart_save(cb: types.CallbackQuery, state: FSMContext, lang: str | Non
                     amount=fallback["amount"],
                     goal_id=fallback["goal"]["id"],
                     goal_title=fallback["goal"]["title"],
+                    preview_currency=fallback.get("currency"),
+                    preview_generated_at=int(time.time()),
                 )
-                await cb.message.edit_text(
+                await safe_edit_text(
+                    cb.message,
                     render_fallback_prompt(fallback, lang),
                     reply_markup=fallback_confirm_keyboard(lang)
                 )
@@ -94,7 +106,8 @@ async def smart_save(cb: types.CallbackQuery, state: FSMContext, lang: str | Non
             "currency_mismatch": t("smart.status.currency_mismatch", lang),
         }
         message = status_map.get(status, t("smart.status.generic", lang))
-        await cb.message.edit_text(
+        await safe_edit_text(
+            cb.message,
             f"ℹ️ {message}",
             reply_markup=await get_main_menu(cb.from_user.id, lang)
         )
@@ -112,14 +125,14 @@ async def smart_save(cb: types.CallbackQuery, state: FSMContext, lang: str | Non
         + t(
             "smart.success.progress_line",
             lang,
-            title=goal.get("title", "—"),
-            progress=progress,
+            title=safe_html_text(goal.get("title", "—"), 120),
+            progress=escape_html(progress),
         )
         + "\n\n"
         + t("smart.success.footer", lang)
     )
 
-    await cb.message.edit_text(text, reply_markup=await get_main_menu(cb.from_user.id, lang))
+    await safe_edit_text(cb.message, text, reply_markup=await get_main_menu(cb.from_user.id, lang))
     await cb.answer()
 
 
@@ -148,8 +161,8 @@ def render_fallback_prompt(data: dict, lang: str | None = None) -> str:
     return (
         header(t("smart.title", lang), "smart")
         + "\n\n"
-        + f"💡 {t('smart.fallback.offer', lang, amount=f'<b>{format_amount(amount, currency=active_currency)}</b>')}\n"
-        + f"🎯 {t('label.goal', lang)}: <b>{goal.get('title', '—')}</b>\n"
+        + f"💡 {t('smart.fallback.offer', lang, amount=f'<b>{escape_html(format_amount(amount, currency=active_currency))}</b>')}\n"
+        + f"🎯 {t('label.goal', lang)}: <b>{safe_html_text(goal.get('title', '—'), 120)}</b>\n"
         + f"{SEPARATOR}\n"
         + f"{note}\n\n"
         + t("smart.fallback.confirm", lang)
@@ -161,11 +174,22 @@ async def smart_fallback_confirm(cb: types.CallbackQuery, state: FSMContext, lan
     data = await state.get_data()
     amount = data.get("amount")
     goal_id = data.get("goal_id")
+    generated_at = int(data.get("preview_generated_at") or 0)
 
-    if not amount or not goal_id:
+    if not amount or not goal_id or not generated_at:
         await state.clear()
-        await cb.message.edit_text(
+        await safe_edit_text(
+            cb.message,
             t("smart.fallback.error.retry", lang),
+            reply_markup=await get_main_menu(cb.from_user.id, lang)
+        )
+        return await cb.answer()
+
+    if time.time() - generated_at > PREVIEW_TTL_SECONDS:
+        await state.clear()
+        await safe_edit_text(
+            cb.message,
+            t("smart.confirm.expired", lang),
             reply_markup=await get_main_menu(cb.from_user.id, lang)
         )
         return await cb.answer()
@@ -179,7 +203,8 @@ async def smart_fallback_confirm(cb: types.CallbackQuery, state: FSMContext, lan
         })
     except (RPCError, RPCTransportError):
         await state.clear()
-        await cb.message.edit_text(
+        await safe_edit_text(
+            cb.message,
             t("smart.fallback.error.failed", lang),
             reply_markup=await get_main_menu(cb.from_user.id, lang)
         )
@@ -191,13 +216,13 @@ async def smart_fallback_confirm(cb: types.CallbackQuery, state: FSMContext, lan
         + "\n\n"
         + money_line(t("smart.saved_label", lang), amount, "income", currency=goal.get("currency") or currency)
         + "\n"
-        + f"🎯 {t('label.goal', lang)}: <b>{goal.get('title', '—')}</b>\n"
-        + f"📊 {t('label.progress', lang)}: <b>{goal.get('progress', 0)}%</b>\n\n"
+        + f"🎯 {t('label.goal', lang)}: <b>{safe_html_text(goal.get('title', '—'), 120)}</b>\n"
+        + f"📊 {t('label.progress', lang)}: <b>{escape_html(goal.get('progress', 0))}%</b>\n\n"
         + t("smart.fallback.success", lang)
     )
 
     await state.clear()
-    await cb.message.edit_text(text, reply_markup=await get_main_menu(cb.from_user.id, lang))
+    await safe_edit_text(cb.message, text, reply_markup=await get_main_menu(cb.from_user.id, lang))
     await cb.answer(t("common.done", lang))
 
 
@@ -206,17 +231,31 @@ async def smart_confirm(cb: types.CallbackQuery, state: FSMContext, lang: str | 
     data = await state.get_data()
     amount = data.get("amount")
     goal_id = data.get("goal_id")
+    preview_currency = data.get("preview_currency") or currency
+    preview_token = data.get("preview_token")
+    generated_at = int(data.get("preview_generated_at") or 0)
 
-    if not amount or not goal_id:
+    if not amount or not goal_id or not generated_at:
         await state.clear()
-        await cb.message.edit_text(
+        await safe_edit_text(
+            cb.message,
             t("smart.confirm.error.retry", lang),
             reply_markup=await get_main_menu(cb.from_user.id, lang)
         )
         return await cb.answer()
 
+    if time.time() - generated_at > PREVIEW_TTL_SECONDS:
+        await state.clear()
+        await safe_edit_text(
+            cb.message,
+            t("smart.confirm.expired", lang),
+            reply_markup=await get_main_menu(cb.from_user.id, lang)
+        )
+        return await cb.answer()
+
     await state.set_state(SmartSaveConfirm.processing)
-    await cb.message.edit_text(
+    await safe_edit_text(
+        cb.message,
         t("smart.confirm.processing", lang),
         reply_markup=None
     )
@@ -224,11 +263,15 @@ async def smart_confirm(cb: types.CallbackQuery, state: FSMContext, lang: str | 
 
     try:
         res = await rpc("smart.save.run", {
-            "tg_user_id": cb.from_user.id
+            "tg_user_id": cb.from_user.id,
+            "preview_token": preview_token,
+            "expected_goal_id": goal_id,
+            "expected_amount": amount,
         })
     except (RPCError, RPCTransportError):
         await state.clear()
-        await cb.message.edit_text(
+        await safe_edit_text(
+            cb.message,
             t("smart.error.failed", lang),
             reply_markup=await get_main_menu(cb.from_user.id, lang)
         )
@@ -237,7 +280,8 @@ async def smart_confirm(cb: types.CallbackQuery, state: FSMContext, lang: str | 
     status = res.get("status")
     if status == "already_saved":
         await state.clear()
-        await cb.message.edit_text(
+        await safe_edit_text(
+            cb.message,
             f"ℹ️ {t('smart.status.already_saved', lang)}",
             reply_markup=await get_main_menu(cb.from_user.id, lang)
         )
@@ -245,7 +289,8 @@ async def smart_confirm(cb: types.CallbackQuery, state: FSMContext, lang: str | 
 
     if status == "insufficient_balance":
         await state.clear()
-        await cb.message.edit_text(
+        await safe_edit_text(
+            cb.message,
             f"ℹ️ {t('smart.status.insufficient_balance', lang)}",
             reply_markup=await get_main_menu(cb.from_user.id, lang)
         )
@@ -253,7 +298,8 @@ async def smart_confirm(cb: types.CallbackQuery, state: FSMContext, lang: str | 
 
     if status == "goal_completed":
         await state.clear()
-        await cb.message.edit_text(
+        await safe_edit_text(
+            cb.message,
             f"ℹ️ {t('smart.status.goal_completed', lang)}",
             reply_markup=await get_main_menu(cb.from_user.id, lang)
         )
@@ -261,7 +307,8 @@ async def smart_confirm(cb: types.CallbackQuery, state: FSMContext, lang: str | 
 
     if status == "currency_mismatch":
         await state.clear()
-        await cb.message.edit_text(
+        await safe_edit_text(
+            cb.message,
             f"ℹ️ {t('smart.status.currency_mismatch', lang)}",
             reply_markup=await get_main_menu(cb.from_user.id, lang)
         )
@@ -269,7 +316,8 @@ async def smart_confirm(cb: types.CallbackQuery, state: FSMContext, lang: str | 
 
     if status not in {"ok", "success"}:
         await state.clear()
-        await cb.message.edit_text(
+        await safe_edit_text(
+            cb.message,
             t("smart.error.failed", lang),
             reply_markup=await get_main_menu(cb.from_user.id, lang)
         )
@@ -278,6 +326,23 @@ async def smart_confirm(cb: types.CallbackQuery, state: FSMContext, lang: str | 
     goal = res.get("goal", {})
     deposited = res.get("deposited") or res.get("safe_save") or amount
     progress = res.get("goal_progress") or goal.get("progress", 0)
+    actual_goal_id = goal.get("id")
+
+    if (
+        actual_goal_id is not None and actual_goal_id != goal_id
+    ) or abs(to_float(deposited) - to_float(amount)) > 0.009:
+        await state.clear()
+        await safe_edit_text(
+            cb.message,
+            t(
+                "smart.confirm.mismatch",
+                lang,
+                expected_amount=escape_html(format_amount(amount, currency=preview_currency)),
+                actual_amount=escape_html(format_amount(deposited, currency=res.get("currency") or goal.get("currency") or preview_currency)),
+            ),
+            reply_markup=await get_main_menu(cb.from_user.id, lang)
+        )
+        return await cb.answer()
 
     text = (
         header(t("smart.title", lang), "smart")
@@ -287,37 +352,37 @@ async def smart_confirm(cb: types.CallbackQuery, state: FSMContext, lang: str | 
         + t(
             "smart.success.progress_line",
             lang,
-            title=goal.get("title", "—"),
-            progress=progress,
+            title=safe_html_text(goal.get("title", "—"), 120),
+            progress=escape_html(progress),
         )
         + "\n\n"
         + t("smart.success.footer", lang)
     )
 
     await state.clear()
-    await cb.message.edit_text(text, reply_markup=await get_main_menu(cb.from_user.id, lang))
+    await safe_edit_text(cb.message, text, reply_markup=await get_main_menu(cb.from_user.id, lang))
     await cb.answer()
 
 
 async def build_fallback_smart_save(tg_user_id: int, res: dict, lang: str | None = None) -> dict | None:
-    today = date.today()
+    today = today_local()
     last_day = calendar.monthrange(today.year, today.month)[1]
-    end_of_month = date(today.year, today.month, last_day)
+    end_of_month = today.replace(day=last_day)
     days_left = (end_of_month - today).days + 1
 
     balance = None
 
-    daily_limit = float(res.get("daily_limit", 0) or 0)
+    daily_limit = to_float(res.get("daily_limit", 0) or 0)
     if res.get("status") in {"no_spare_money", "too_small"} and daily_limit > 0:
         return None
 
     try:
         budget = await rpc("budget.recalculate", {
             "tg_user_id": tg_user_id,
-            "month": today.strftime("%Y-%m"),
+            "month": current_month(),
         })
-        income = float(budget.get("income", 0))
-        expense = float(budget.get("expenses", 0))
+        income = to_float(budget.get("income", 0))
+        expense = to_float(budget.get("expenses", 0))
         balance = income - expense
     except (RPCError, RPCTransportError):
         return None

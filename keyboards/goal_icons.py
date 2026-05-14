@@ -1,6 +1,8 @@
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from i18n import t
 
+# Placeholder keyboard for a future goal-icon flow.
+# It is intentionally not wired into the current goal creation UX.
 ICONS = [
     "📱", "🚗", "🏠", "🎁",
     "🎓", "🛋", "💻", "✈️",

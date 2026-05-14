@@ -4,8 +4,9 @@ from aiogram import Router, types, F
 from rpc import rpc, RPCError, RPCTransportError
 from keyboards.keyboards import insights_menu
 from ui.formatting import header, money_line, SEPARATOR
-from utils.ui import clean_text
+from utils.ui import safe_html_text, to_float
 from i18n import t
+from utils.telegram import safe_edit_text
 
 router = Router()
 
@@ -17,7 +18,7 @@ async def menu_insights(cb: types.CallbackQuery, lang: str | None = None):
         + "\n\n"
         + t("insights.menu.body", lang)
     )
-    await cb.message.edit_text(text, reply_markup=insights_menu(lang))
+    await safe_edit_text(cb.message, text, reply_markup=insights_menu(lang))
     await cb.answer()
 
 
@@ -30,14 +31,15 @@ async def insights_week(cb: types.CallbackQuery, lang: str | None = None):
             "days": 7,
         })
     except (RPCError, RPCTransportError):
-        await cb.message.edit_text(
+        await safe_edit_text(
+            cb.message,
             t("insights.week.error", lang),
             reply_markup=insights_menu(lang)
         )
         return await cb.answer()
 
-    summary = clean_text(res.get("summary") or t("insights.week.empty", lang), 600)
-    recommendation = clean_text(res.get("recommendation") or "", 300)
+    summary = safe_html_text(res.get("summary") or t("insights.week.empty", lang), 600)
+    recommendation = safe_html_text(res.get("recommendation") or "", 300)
 
     text = (
         header(t("insights.week.title", lang), "insights")
@@ -47,7 +49,7 @@ async def insights_week(cb: types.CallbackQuery, lang: str | None = None):
     if recommendation:
         text += "\n\n" + header(t("insights.week.recommendation_title", lang), "tip") + "\n" + recommendation
 
-    await cb.message.edit_text(text, reply_markup=insights_menu(lang))
+    await safe_edit_text(cb.message, text, reply_markup=insights_menu(lang))
     await cb.answer()
 
 
@@ -60,14 +62,15 @@ async def insights_trend(cb: types.CallbackQuery, lang: str | None = None):
             "days": 30,
         })
     except (RPCError, RPCTransportError):
-        await cb.message.edit_text(
+        await safe_edit_text(
+            cb.message,
             t("insights.trend.error", lang),
             reply_markup=insights_menu(lang)
         )
         return await cb.answer()
 
-    summary = clean_text(res.get("summary") or t("insights.trend.empty", lang), 600)
-    recommendation = clean_text(res.get("recommendation") or "", 300)
+    summary = safe_html_text(res.get("summary") or t("insights.trend.empty", lang), 600)
+    recommendation = safe_html_text(res.get("recommendation") or "", 300)
 
     text = (
         header(t("insights.trend.title", lang), "insights")
@@ -77,7 +80,7 @@ async def insights_trend(cb: types.CallbackQuery, lang: str | None = None):
     if recommendation:
         text += "\n\n" + header(t("insights.week.recommendation_title", lang), "tip") + "\n" + recommendation
 
-    await cb.message.edit_text(text, reply_markup=insights_menu(lang))
+    await safe_edit_text(cb.message, text, reply_markup=insights_menu(lang))
     await cb.answer()
 
 
@@ -86,7 +89,8 @@ async def insights_savings(cb: types.CallbackQuery, lang: str | None = None, cur
     try:
         res = await rpc("goal.list", {"tg_user_id": cb.from_user.id})
     except (RPCError, RPCTransportError):
-        await cb.message.edit_text(
+        await safe_edit_text(
+            cb.message,
             t("insights.savings.error", lang),
             reply_markup=insights_menu(lang)
         )
@@ -94,7 +98,8 @@ async def insights_savings(cb: types.CallbackQuery, lang: str | None = None, cur
 
     goals = res.get("goals", [])
     if not goals:
-        await cb.message.edit_text(
+        await safe_edit_text(
+            cb.message,
             header(t("insights.savings.title", lang), "goal")
             + "\n\n"
             + t("insights.savings.empty", lang),
@@ -111,8 +116,8 @@ async def insights_savings(cb: types.CallbackQuery, lang: str | None = None, cur
             "saved": 0.0,
             "target": 0.0,
         })
-        bucket["saved"] += float(goal.get("amount_saved") or 0)
-        bucket["target"] += float(goal.get("amount_total") or 0)
+        bucket["saved"] += to_float(goal.get("amount_saved") or 0)
+        bucket["target"] += to_float(goal.get("amount_total") or 0)
 
     lines = []
     for bucket in grouped.values():
@@ -130,7 +135,7 @@ async def insights_savings(cb: types.CallbackQuery, lang: str | None = None, cur
         lines.pop()
 
     text = header(t("insights.savings.title", lang), "goal") + "\n\n" + "\n".join(lines)
-    await cb.message.edit_text(text, reply_markup=insights_menu(lang))
+    await safe_edit_text(cb.message, text, reply_markup=insights_menu(lang))
     await cb.answer()
 
 
@@ -140,13 +145,14 @@ async def insights_tip(cb: types.CallbackQuery, lang: str | None = None):
     try:
         res = await rpc("ai.insight.daily", {"tg_user_id": cb.from_user.id})
     except (RPCError, RPCTransportError):
-        await cb.message.edit_text(
+        await safe_edit_text(
+            cb.message,
             t("insights.tip.error", lang),
             reply_markup=insights_menu(lang)
         )
         return await cb.answer()
 
-    insight = res.get("insight") or t("insights.tip.empty", lang)
+    insight = safe_html_text(res.get("insight") or t("insights.tip.empty", lang), 600)
     text = header(t("insights.tip.title", lang), "tip") + "\n\n" + insight
-    await cb.message.edit_text(text, reply_markup=insights_menu(lang))
+    await safe_edit_text(cb.message, text, reply_markup=insights_menu(lang))
     await cb.answer()

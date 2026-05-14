@@ -8,6 +8,8 @@
   "common.done": "Done",
   "common.yes": "Yes",
   "common.no": "No",
+  "common.error.backend_unavailable": "⚠️ The service is temporarily unavailable. Please try again in a moment.",
+  "common.error.unexpected": "⚠️ Something went wrong. Please try again.",
   "common.main_menu.title": "🏠 Main menu",
   "common.main_menu.subtitle": "Quick actions and key sections — below.",
 
@@ -17,6 +19,7 @@
   "language.options.en": "English",
   "language.recommended": "Recommended",
   "language.changed": "✅ Language selected: {language}",
+  "language.sync_failed": "⚠️ The interface language was changed locally, but the server did not confirm the update yet. Please try again later.",
 
   "settings.title": "⚙️ <b>Settings</b>",
   "settings.subtitle": "Personalization and control",
@@ -121,6 +124,8 @@
   "smart.confirm.button": "✅ Confirm Smart Save",
   "smart.confirm.processing": "⏳ Running Smart Save…",
   "smart.confirm.error.retry": "⚠️ Could not confirm Smart Save. Try again.",
+  "smart.confirm.expired": "⚠️ Smart Save preview expired. Please open Smart Save again.",
+  "smart.confirm.mismatch": "⚠️ Smart Save changed before confirmation.\nExpected: <b>{expected_amount}</b>\nCurrent: <b>{actual_amount}</b>\nPlease refresh the preview and confirm again.",
   "smart.status.already_saved": "Smart Save was already used today. Try again tomorrow.",
   "smart.status.insufficient_balance": "Not enough available balance for Smart Save.",
   "smart.status.goal_completed": "Goal is already completed. Smart Save is not needed.",
@@ -179,6 +184,7 @@
   "goals.menu.back_button": "⬅️ Back",
   "goals.manage.list_error": "⚠️ Could not load goals. Please try later.",
   "goals.manage.load_error": "⚠️ Could not load goal. Please try later.",
+  "goals.manage.stale_goal": "⚠️ This goal is no longer available. Please reopen the goals list.",
   "goals.manage.primary_updated": "⭐ Primary goal updated",
   "goals.manage.deposit_prompt": "💸 <b>Goal top‑up</b>\n\nEnter an amount. Example: <b>150000</b>.",
   "goals.manage.deposit_confirm_title": "🧾 <b>Review top‑up</b>",

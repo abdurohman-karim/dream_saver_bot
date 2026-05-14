@@ -3,9 +3,10 @@ from aiogram import Router, types, F
 
 from rpc import rpc, RPCError, RPCTransportError
 from keyboards.keyboards import back_button
-from utils.ui import format_amount
+from utils.ui import format_amount, safe_html_text, to_float
 from ui.formatting import header, SEPARATOR
 from i18n import t
+from utils.telegram import safe_edit_text
 
 router = Router()
 
@@ -17,7 +18,8 @@ async def menu_progress(cb: types.CallbackQuery, lang: str | None = None, curren
     try:
         res = await rpc("goal.list", {"tg_user_id": user_id})
     except (RPCError, RPCTransportError):
-        await cb.message.edit_text(
+        await safe_edit_text(
+            cb.message,
             t("progress.error", lang),
             reply_markup=back_button(lang)
         )
@@ -25,7 +27,8 @@ async def menu_progress(cb: types.CallbackQuery, lang: str | None = None, curren
 
     goals = res.get("goals", [])
     if not goals:
-        await cb.message.edit_text(
+        await safe_edit_text(
+            cb.message,
             t("progress.empty", lang),
             reply_markup=back_button(lang)
         )
@@ -34,18 +37,19 @@ async def menu_progress(cb: types.CallbackQuery, lang: str | None = None, curren
     text = header(t("progress.title", lang), "insights") + "\n\n"
 
     for g in goals:
-        total = float(g.get("amount_total", 0) or 0)
-        saved = float(g.get("amount_saved", 0) or 0)
+        total = to_float(g.get("amount_total", 0))
+        saved = to_float(g.get("amount_saved", 0))
         percent = int(saved / total * 100) if total else 0
 
         text += (
-            f"🎯 <b>{g['title']}</b>\n"
+            f"🎯 <b>{safe_html_text(g.get('title') or '—', 120)}</b>\n"
             f"💰 {t('label.saved', lang)}: <b>{format_amount(saved, currency=g.get('currency') or currency)}</b> / {format_amount(total, currency=g.get('currency') or currency)}\n"
             f"📈 {t('label.progress', lang)}: <b>{percent}%</b>\n"
             f"{SEPARATOR}\n"
         )
 
-    await cb.message.edit_text(
+    await safe_edit_text(
+        cb.message,
         text,
         reply_markup=back_button(lang)
     )

@@ -8,6 +8,8 @@
   "common.done": "Готово",
   "common.yes": "Да",
   "common.no": "Нет",
+  "common.error.backend_unavailable": "⚠️ Сервис временно недоступен. Попробуйте ещё раз чуть позже.",
+  "common.error.unexpected": "⚠️ Что-то пошло не так. Попробуйте ещё раз.",
   "common.main_menu.title": "🏠 Главное меню",
   "common.main_menu.subtitle": "Быстрые действия и ключевые разделы — ниже.",
 
@@ -17,6 +19,7 @@
   "language.options.en": "English",
   "language.recommended": "Рекомендуем",
   "language.changed": "✅ Язык выбран: {language}",
+  "language.sync_failed": "⚠️ Язык интерфейса изменён локально, но сервер пока не подтвердил обновление. Попробуйте позже.",
 
   "settings.title": "⚙️ <b>Настройки</b>",
   "settings.subtitle": "Персонализация и управление",
@@ -121,6 +124,8 @@
   "smart.confirm.button": "✅ Подтвердить Smart Save",
   "smart.confirm.processing": "⏳ Выполняю Smart Save…",
   "smart.confirm.error.retry": "⚠️ Не удалось подтвердить Smart Save. Попробуй еще раз.",
+  "smart.confirm.expired": "⚠️ Предпросмотр Smart Save устарел. Откройте Smart Save заново.",
+  "smart.confirm.mismatch": "⚠️ Smart Save изменился перед подтверждением.\nОжидалось: <b>{expected_amount}</b>\nСейчас: <b>{actual_amount}</b>\nОбновите предпросмотр и подтвердите ещё раз.",
   "smart.status.already_saved": "Smart Save уже использован сегодня. Попробуйте завтра.",
   "smart.status.insufficient_balance": "Недостаточно доступного баланса для Smart Save.",
   "smart.status.goal_completed": "Цель уже достигнута. Smart Save не требуется.",
@@ -179,6 +184,7 @@
   "goals.menu.back_button": "⬅️ Назад",
   "goals.manage.list_error": "⚠️ Не удалось загрузить цели. Попробуй позже.",
   "goals.manage.load_error": "⚠️ Не удалось загрузить цель. Попробуй позже.",
+  "goals.manage.stale_goal": "⚠️ Эта цель больше недоступна. Откройте список целей заново.",
   "goals.manage.primary_updated": "⭐ Основная цель обновлена",
   "goals.manage.deposit_prompt": "💸 <b>Пополнение цели</b>\n\nВведи сумму. Пример: <b>150000</b>.",
   "goals.manage.deposit_confirm_title": "🧾 <b>Проверьте пополнение</b>",

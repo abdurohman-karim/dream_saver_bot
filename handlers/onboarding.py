@@ -2,7 +2,6 @@
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from datetime import date
 
 from states.onboarding import OnboardingStates
 from ui.menus import get_main_menu
@@ -12,6 +11,9 @@ from handlers.goals.goal_create import new_goal_start
 from handlers.add_income import add_income_start
 from handlers.add_transaction import add_start
 from i18n import t
+from utils.dates import today_iso
+from utils.telegram import safe_edit_text
+from utils.ui import to_float
 
 router = Router()
 
@@ -64,7 +66,8 @@ async def start_onboarding(message: types.Message, state: FSMContext | None = No
 @router.callback_query(F.data == "onb_start")
 async def onboarding_begin(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
     await state.set_state(OnboardingStates.focus)
-    await cb.message.edit_text(
+    await safe_edit_text(
+        cb.message,
         header(t("onboarding.focus.title", lang), "info")
         + "\n\n"
         + t("onboarding.focus.body", lang),
@@ -76,7 +79,8 @@ async def onboarding_begin(cb: types.CallbackQuery, state: FSMContext, lang: str
 @router.callback_query(F.data == "onb_skip")
 async def onboarding_skip(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
     await state.clear()
-    await cb.message.edit_text(
+    await safe_edit_text(
+        cb.message,
         header(t("menu.main.title", lang), None)
         + "\n\n"
         + t("menu.main.subtitle", lang),
@@ -98,7 +102,7 @@ async def onboarding_focus(cb: types.CallbackQuery, state: FSMContext, lang: str
         + t("onboarding.goal.body", lang)
     )
 
-    await cb.message.edit_text(text, reply_markup=onboarding_goal_keyboard(lang))
+    await safe_edit_text(cb.message, text, reply_markup=onboarding_goal_keyboard(lang))
     await cb.answer()
 
 
@@ -112,7 +116,8 @@ async def onboarding_goal_create(cb: types.CallbackQuery, state: FSMContext, lan
 @router.callback_query(F.data == "onb_goal_skip")
 async def onboarding_goal_skip(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
     await state.set_state(OnboardingStates.offer_income)
-    await cb.message.edit_text(
+    await safe_edit_text(
+        cb.message,
         header(t("onboarding.income.title", lang), "info")
         + "\n\n"
         + t("onboarding.income.body", lang),
@@ -139,14 +144,13 @@ async def onboarding_expense_add(cb: types.CallbackQuery, state: FSMContext, lan
 async def onboarding_finish(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None, currency: dict | None = None):
     await state.clear()
 
-    today = date.today().isoformat()
     try:
-        daily = await rpc("transaction.getDaily", {"tg_user_id": cb.from_user.id, "date": today})
+        daily = await rpc("transaction.getDaily", {"tg_user_id": cb.from_user.id, "date": today_iso()})
     except (RPCError, RPCTransportError):
         daily = {}
 
-    income = daily.get("income", 0)
-    expense = daily.get("expense", 0)
+    income = to_float(daily.get("income", 0))
+    expense = to_float(daily.get("expense", 0))
     balance = float(income) - float(expense)
 
     lines = [
@@ -158,7 +162,8 @@ async def onboarding_finish(cb: types.CallbackQuery, state: FSMContext, lang: st
 
     text = header(t("onboarding.finish.title", lang), "insights") + "\n\n" + "\n".join(lines)
 
-    await cb.message.edit_text(
+    await safe_edit_text(
+        cb.message,
         text,
         reply_markup=await get_main_menu(cb.from_user.id, lang)
     )

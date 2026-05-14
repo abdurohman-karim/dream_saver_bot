@@ -2,6 +2,7 @@ from aiogram import BaseMiddleware
 
 from rpc import telegram_status, RPCTransportError
 from storage.currency_store import store
+from utils.ui import normalize_currency
 
 
 class CurrencyMiddleware(BaseMiddleware):
@@ -14,11 +15,12 @@ class CurrencyMiddleware(BaseMiddleware):
             return await handler(event, data)
 
         currency = self.store.get(user.id)
-        if currency is None:
+        if currency is None or not isinstance(currency, dict) or not currency.get("code"):
             try:
                 status = await telegram_status(user.id)
                 currency = status.get("currency")
                 if currency:
+                    currency = normalize_currency(currency)
                     self.store.set(user.id, currency)
             except RPCTransportError:
                 currency = None

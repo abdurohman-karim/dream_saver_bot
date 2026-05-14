@@ -5,15 +5,17 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 
-from config import BOT_TOKEN
+from config import BOT_TOKEN, validate_config
 from handlers.router import main_router
 from middlewares.registration import RegistrationMiddleware
 from middlewares.currency import CurrencyMiddleware
 from middlewares.language import LanguageMiddleware
 from middlewares.language_selection import LanguageSelectionMiddleware
+from rpc import close_http_client
 
 
 async def main():
+    validate_config()
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -40,8 +42,11 @@ async def main():
     dp.include_router(main_router)
 
     logging.info("Bot starting...")
-    await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot)
+    try:
+        await bot.delete_webhook(drop_pending_updates=True)
+        await dp.start_polling(bot)
+    finally:
+        await close_http_client()
 
 
 if __name__ == "__main__":

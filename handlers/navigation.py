@@ -5,6 +5,7 @@ from aiogram.fsm.context import FSMContext
 from ui.menus import get_main_menu
 from ui.formatting import header
 from i18n import t
+from utils.telegram import safe_edit_text
 
 router = Router()
 
@@ -12,7 +13,8 @@ router = Router()
 @router.callback_query(lambda c: c.data == "menu_back")
 async def back_to_main(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
     await state.clear()
-    await cb.message.edit_text(
+    await safe_edit_text(
+        cb.message,
         header(t("menu.main.title", lang), None) + "\n\n" + t("menu.main.subtitle", lang),
         reply_markup=await get_main_menu(cb.from_user.id, lang)
     )
@@ -23,7 +25,8 @@ async def back_to_main(cb: types.CallbackQuery, state: FSMContext, lang: str | N
 async def cancel_action(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None):
     await state.clear()
 
-    await cb.message.edit_text(
+    await safe_edit_text(
+        cb.message,
         f"{t('nav.cancel.title', lang)}\n\n{t('nav.cancel.body', lang)}",
         reply_markup=await get_main_menu(cb.from_user.id, lang)
     )

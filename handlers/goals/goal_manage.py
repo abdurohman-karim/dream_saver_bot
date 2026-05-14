@@ -8,9 +8,10 @@ from rpc import rpc, RPCError, RPCTransportError
 from keyboards.goals_manage import goals_list_keyboard, goal_manage_keyboard
 from states.goals import DepositGoal
 from ui.menus import get_main_menu
-from utils.ui import format_amount, format_date, normalize_currency
+from utils.ui import format_amount, format_date, normalize_currency, parse_amount, safe_html_text, to_float
 from ui.formatting import SEPARATOR
 from i18n import t
+from utils.telegram import safe_edit_text, safe_edit_message_text
 
 router = Router()
 
@@ -39,13 +40,26 @@ def close_confirm_keyboard(goal_id: int, lang: str | None = None):
     return kb.as_markup()
 
 
+async def _show_goal_unavailable(cb: types.CallbackQuery, lang: str | None = None):
+    await cb.answer(t("goals.manage.stale_goal", lang), show_alert=True)
+    await menu_goals(cb, lang=lang)
+
+
+def _goal_percent(goal: dict) -> tuple[float, float, int]:
+    total = to_float(goal.get("amount_total", 0))
+    saved = to_float(goal.get("amount_saved", 0))
+    percent = int(saved / total * 100) if total else 0
+    return total, saved, percent
+
+
 @router.callback_query(F.data == "menu_goals")
 async def menu_goals(cb: types.CallbackQuery, lang: str | None = None):
     user_id = cb.from_user.id
     try:
         result = await rpc("goal.list", {"tg_user_id": user_id})
     except (RPCError, RPCTransportError):
-        await cb.message.edit_text(
+        await safe_edit_text(
+            cb.message,
             t("goals.manage.list_error", lang),
             reply_markup=goals_list_keyboard([], lang)
         )
@@ -60,13 +74,15 @@ async def menu_goals(cb: types.CallbackQuery, lang: str | None = None):
         kb.button(text=t("common.back", lang), callback_data="menu_back")
         kb.adjust(1)
 
-        await cb.message.edit_text(
+        await safe_edit_text(
+            cb.message,
             t("goals.menu.empty", lang),
             reply_markup=kb.as_markup()
         )
         return await cb.answer()
 
-    await cb.message.edit_text(
+    await safe_edit_text(
+        cb.message,
         t("goals.menu.title", lang),
         reply_markup=goals_list_keyboard(goals, lang)
     )
@@ -76,26 +92,23 @@ async def menu_goals(cb: types.CallbackQuery, lang: str | None = None):
 
 @router.callback_query(F.data.startswith("goal_manage_"))
 async def goal_manage(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None, currency: dict | None = None):
-    goal_id = int(cb.data.split("_")[-1])
+    try:
+        goal_id = int(cb.data.split("_")[-1])
+    except (TypeError, ValueError):
+        return await _show_goal_unavailable(cb, lang)
     user_id = cb.from_user.id
     await state.clear()
 
     try:
         result = await rpc("goal.get", {"tg_user_id": user_id, "goal_id": goal_id})
     except (RPCError, RPCTransportError):
-        await cb.message.edit_text(
-            t("goals.manage.load_error", lang),
-            reply_markup=await get_main_menu(cb.from_user.id, lang)
-        )
-        return await cb.answer()
+        return await _show_goal_unavailable(cb, lang)
 
     goal = result.get("result") or result
 
     icon = goal.get("icon", "🎯")
-    title = goal["title"]
-    total = goal["amount_total"]
-    saved = goal["amount_saved"]
-    percent = int(saved / total * 100) if total else 0
+    title = safe_html_text(goal.get("title") or "—", 120)
+    total, saved, percent = _goal_percent(goal)
 
     bar = "█" * (percent // 10) + "░" * (10 - percent // 10)
 
@@ -115,7 +128,8 @@ async def goal_manage(cb: types.CallbackQuery, state: FSMContext, lang: str | No
         f"{t('goals.detail.deadline', lang)}: {format_date(deadline)}\n"
     )
 
-    await cb.message.edit_text(
+    await safe_edit_text(
+        cb.message,
         text,
         reply_markup=goal_manage_keyboard(goal_id, is_primary, status, lang)
     )
@@ -124,12 +138,18 @@ async def goal_manage(cb: types.CallbackQuery, state: FSMContext, lang: str | No
 
 @router.callback_query(F.data.startswith("goal_set_primary_"))
 async def set_primary(cb: types.CallbackQuery, lang: str | None = None):
-    goal_id = int(cb.data.split("_")[-1])
+    try:
+        goal_id = int(cb.data.split("_")[-1])
+    except (TypeError, ValueError):
+        return await _show_goal_unavailable(cb, lang)
 
-    await rpc("goal.setPrimary", {
-        "tg_user_id": cb.from_user.id,
-        "goal_id": goal_id
-    })
+    try:
+        await rpc("goal.setPrimary", {
+            "tg_user_id": cb.from_user.id,
+            "goal_id": goal_id
+        })
+    except (RPCError, RPCTransportError):
+        return await _show_goal_unavailable(cb, lang)
 
     await cb.answer(t("goals.manage.primary_updated", lang))
     await menu_goals(cb, lang=lang)
@@ -137,31 +157,45 @@ async def set_primary(cb: types.CallbackQuery, lang: str | None = None):
 
 @router.callback_query(F.data.startswith("goal_priority_up_"))
 async def priority_up(cb: types.CallbackQuery, lang: str | None = None):
-    goal_id = int(cb.data.split("_")[-1])
-    await rpc("goal.priority.up", {"tg_user_id": cb.from_user.id, "goal_id": goal_id})
+    try:
+        goal_id = int(cb.data.split("_")[-1])
+    except (TypeError, ValueError):
+        return await _show_goal_unavailable(cb, lang)
+    try:
+        await rpc("goal.priority.up", {"tg_user_id": cb.from_user.id, "goal_id": goal_id})
+    except (RPCError, RPCTransportError):
+        return await _show_goal_unavailable(cb, lang)
 
     await render_goal(cb, goal_id, lang=lang)
 
 
 @router.callback_query(F.data.startswith("goal_priority_down_"))
 async def priority_down(cb: types.CallbackQuery, lang: str | None = None):
-    goal_id = int(cb.data.split("_")[-1])
-    await rpc("goal.priority.down", {"tg_user_id": cb.from_user.id, "goal_id": goal_id})
+    try:
+        goal_id = int(cb.data.split("_")[-1])
+    except (TypeError, ValueError):
+        return await _show_goal_unavailable(cb, lang)
+    try:
+        await rpc("goal.priority.down", {"tg_user_id": cb.from_user.id, "goal_id": goal_id})
+    except (RPCError, RPCTransportError):
+        return await _show_goal_unavailable(cb, lang)
 
     await render_goal(cb, goal_id, lang=lang)
 
 
 @router.callback_query(F.data.regexp(r"^goal_deposit_\d+$"))
 async def deposit_start(cb: types.CallbackQuery, state: FSMContext, lang: str | None = None, currency: dict | None = None):
-    goal_id = int(cb.data.split("_")[-1])
-    goal_currency = currency
+    try:
+        goal_id = int(cb.data.split("_")[-1])
+    except (TypeError, ValueError):
+        return await _show_goal_unavailable(cb, lang)
 
     try:
         result = await rpc("goal.get", {"tg_user_id": cb.from_user.id, "goal_id": goal_id})
         goal = result.get("result") or result
         goal_currency = goal.get("currency") or currency
     except (RPCError, RPCTransportError):
-        goal_currency = currency
+        return await _show_goal_unavailable(cb, lang)
 
     await state.update_data(
         goal_id=goal_id,
@@ -169,7 +203,8 @@ async def deposit_start(cb: types.CallbackQuery, state: FSMContext, lang: str | 
         goal_currency=normalize_currency(goal_currency) if goal_currency else None,
     )
 
-    await cb.message.edit_text(
+    await safe_edit_text(
+        cb.message,
         t("goals.manage.deposit_prompt", lang),
         reply_markup=deposit_input_keyboard(goal_id, lang)
     )
@@ -180,8 +215,12 @@ async def deposit_start(cb: types.CallbackQuery, state: FSMContext, lang: str | 
 
 @router.callback_query(F.data.startswith("goal_close_completed_"))
 async def close_goal(cb: types.CallbackQuery, lang: str | None = None):
-    goal_id = int(cb.data.split("_")[-1])
-    await cb.message.edit_text(
+    try:
+        goal_id = int(cb.data.split("_")[-1])
+    except (TypeError, ValueError):
+        return await _show_goal_unavailable(cb, lang)
+    await safe_edit_text(
+        cb.message,
         t("goals.manage.close_prompt", lang),
         reply_markup=close_confirm_keyboard(goal_id, lang)
     )
@@ -190,18 +229,17 @@ async def close_goal(cb: types.CallbackQuery, lang: str | None = None):
 
 @router.callback_query(F.data.startswith("goal_close_confirm_"))
 async def close_goal_confirm(cb: types.CallbackQuery, lang: str | None = None):
-    goal_id = int(cb.data.split("_")[-1])
+    try:
+        goal_id = int(cb.data.split("_")[-1])
+    except (TypeError, ValueError):
+        return await _show_goal_unavailable(cb, lang)
     try:
         result = await rpc("goal.close", {
             "tg_user_id": cb.from_user.id,
             "goal_id": goal_id
         })
     except (RPCError, RPCTransportError):
-        await cb.message.edit_text(
-            t("goals.manage.close_error", lang),
-            reply_markup=await get_main_menu(cb.from_user.id, lang)
-        )
-        return await cb.answer()
+        return await _show_goal_unavailable(cb, lang)
 
     await cb.answer(t("goals.manage.closed", lang))
     await render_goal(cb, goal_id, rpc_result=result, lang=lang)
@@ -209,12 +247,18 @@ async def close_goal_confirm(cb: types.CallbackQuery, lang: str | None = None):
 
 @router.callback_query(F.data.startswith("goal_reopen_"))
 async def reopen_goal(cb: types.CallbackQuery, lang: str | None = None):
-    goal_id = int(cb.data.split("_")[-1])
+    try:
+        goal_id = int(cb.data.split("_")[-1])
+    except (TypeError, ValueError):
+        return await _show_goal_unavailable(cb, lang)
 
-    result = await rpc("goal.reopen", {
-        "tg_user_id": cb.from_user.id,
-        "goal_id": goal_id
-    })
+    try:
+        result = await rpc("goal.reopen", {
+            "tg_user_id": cb.from_user.id,
+            "goal_id": goal_id
+        })
+    except (RPCError, RPCTransportError):
+        return await _show_goal_unavailable(cb, lang)
 
     await cb.answer(t("goals.manage.reopened", lang))
 
@@ -223,22 +267,17 @@ async def reopen_goal(cb: types.CallbackQuery, lang: str | None = None):
 
 @router.message(DepositGoal.waiting_for_amount)
 async def deposit_amount_handler(message: types.Message, state: FSMContext, lang: str | None = None, currency: dict | None = None):
-    text = message.text.replace(" ", "").replace(",", ".")
-
-    try:
-        amount = float(text)
-        if amount <= 0:
-            raise ValueError
-    except:
+    data = await state.get_data()
+    goal_currency = data.get("goal_currency") or currency
+    amount = parse_amount(message.text, currency=goal_currency)
+    if amount is None:
         return await message.answer(t("goals.create.amount_invalid", lang))
 
-    data = await state.get_data()
     goal_id = data["goal_id"]
-    goal_currency = data.get("goal_currency") or currency
 
     try:
         await message.delete()
-    except:
+    except Exception:
         pass
 
     await state.update_data(amount=amount)
@@ -246,7 +285,8 @@ async def deposit_amount_handler(message: types.Message, state: FSMContext, lang
 
     bot_msg_id = data.get("bot_message_id")
     if bot_msg_id:
-        await message.bot.edit_message_text(
+        await safe_edit_message_text(
+            message.bot,
             chat_id=message.chat.id,
             message_id=bot_msg_id,
             text=(
@@ -275,11 +315,7 @@ async def deposit_confirm(cb: types.CallbackQuery, state: FSMContext, lang: str 
         })
     except (RPCError, RPCTransportError):
         await state.clear()
-        await cb.message.edit_text(
-            t("goals.manage.deposit_error", lang),
-            reply_markup=await get_main_menu(cb.from_user.id, lang)
-        )
-        return await cb.answer()
+        return await _show_goal_unavailable(cb, lang)
 
     await state.clear()
     await cb.answer(t("goals.manage.deposit_saved", lang))
@@ -297,19 +333,13 @@ async def render_goal(event: types.Message | types.CallbackQuery, goal_id: int, 
             goal = result.get("result") or result
         except (RPCError, RPCTransportError):
             if isinstance(event, types.CallbackQuery):
-                await event.message.edit_text(
-                    t("goals.manage.load_error", lang),
-                    reply_markup=await get_main_menu(event.from_user.id, lang)
-                )
-                return await event.answer()
+                return await _show_goal_unavailable(event, lang)
             await event.answer(t("goals.manage.load_error", lang))
             return None
 
     icon = goal.get("icon", "🎯")
-    title = goal["title"]
-    total = goal["amount_total"]
-    saved = goal["amount_saved"]
-    percent = int(saved / total * 100) if total else 0
+    title = safe_html_text(goal.get("title") or "—", 120)
+    total, saved, percent = _goal_percent(goal)
     bar = "█" * (percent // 10) + "░" * (10 - percent // 10)
 
     is_primary = goal.get("is_primary", False)
@@ -332,10 +362,7 @@ async def render_goal(event: types.Message | types.CallbackQuery, goal_id: int, 
 
     # Если это callback
     if isinstance(event, types.CallbackQuery):
-        try:
-            await event.message.edit_text(text, reply_markup=markup)
-        except:
-            pass
+        await safe_edit_text(event.message, text, reply_markup=markup)
         return await event.answer()
 
     # Если это обычное сообщение (после ввода суммы)

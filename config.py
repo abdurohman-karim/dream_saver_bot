@@ -1,13 +1,33 @@
 import os
 
+from dotenv import load_dotenv
+load_dotenv()
+
 BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", "http://localhost:5136/api").rstrip("/")
+APP_TIMEZONE = os.getenv("APP_TIMEZONE", "Asia/Tashkent")
+
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+RPC_TOKEN = os.getenv("RPC_TOKEN")
+TELEGRAM_BOT_SECRET = os.getenv("TELEGRAM_BOT_WEBHOOK_SECRET") or RPC_TOKEN
 
 RPC_URL = f"{BACKEND_BASE_URL}/rpc"
-RPC_TOKEN = os.getenv("RPC_TOKEN", "RQd6Zubz64M36WGdyb3FYV3L16c57661cd787c58f")
-TELEGRAM_BOT_SECRET = os.getenv("TELEGRAM_BOT_WEBHOOK_SECRET", RPC_TOKEN)
-
 TELEGRAM_REGISTER_URL = f"{BACKEND_BASE_URL}/telegram/register"
 TELEGRAM_STATUS_URL = f"{BACKEND_BASE_URL}/telegram/status"
 TELEGRAM_SET_LANGUAGE_URL = f"{BACKEND_BASE_URL}/telegram/set-language"
 
-BOT_TOKEN = "5978539787:AAGBG5__KP9R8MWNWGI0RrZka2MWIkYul5M"
+
+def validate_config() -> None:
+    missing = []
+    if not BOT_TOKEN:
+        missing.append("BOT_TOKEN")
+    if not RPC_TOKEN:
+        missing.append("RPC_TOKEN")
+    if not BACKEND_BASE_URL:
+        missing.append("BACKEND_BASE_URL")
+
+    if missing:
+        names = ", ".join(missing)
+        raise RuntimeError(
+            f"Missing required environment variables: {names}. "
+            "Set real values in the environment before starting the bot."
+        )

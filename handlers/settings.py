@@ -19,7 +19,8 @@ from storage.registration_store import store as registration_store
 from handlers.onboarding import start_onboarding
 from handlers.registration import send_registration_prompt
 from states.language_selection import LanguageSelection
-from utils.ui import currency_label
+from utils.ui import currency_label, escape_html, normalize_currency
+from utils.telegram import safe_edit_text
 
 router = Router()
 
@@ -67,7 +68,7 @@ def render_settings_text(lang: str | None = None, currency: dict | None = None) 
     if currency:
         lines.extend([
             "",
-            f"{t('settings.current_currency', lang)}: <b>{currency_label(currency)}</b>",
+            f"{t('settings.current_currency', lang)}: <b>{escape_html(currency_label(currency))}</b>",
         ])
 
     return "\n".join(lines)
@@ -79,7 +80,7 @@ async def send_language_prompt(target: types.Message | types.CallbackQuery, sugg
         text += f"\n\n{t('language.recommended', lang)}: {get_language_label(suggested, lang)}"
 
     if isinstance(target, types.CallbackQuery):
-        await target.message.edit_text(text, reply_markup=language_keyboard(context, suggested, lang))
+        await safe_edit_text(target.message, text, reply_markup=language_keyboard(context, suggested, lang))
         await target.answer()
         return
 
@@ -89,7 +90,7 @@ async def send_language_prompt(target: types.Message | types.CallbackQuery, sugg
 @router.callback_query(F.data == "menu_settings")
 async def open_settings(cb: types.CallbackQuery, lang: str | None = None, currency: dict | None = None):
     text = render_settings_text(lang, currency)
-    await cb.message.edit_text(text, reply_markup=settings_menu_keyboard(lang))
+    await safe_edit_text(cb.message, text, reply_markup=settings_menu_keyboard(lang))
     await cb.answer()
 
 
@@ -114,9 +115,10 @@ async def open_currency_settings(cb: types.CallbackQuery, lang: str | None = Non
         f"{t('settings.currency.prompt', lang)}"
     )
     if current:
-        text += f"\n\n{t('settings.current_currency', lang)}: <b>{currency_label(current)}</b>"
+        text += f"\n\n{t('settings.current_currency', lang)}: <b>{escape_html(currency_label(current))}</b>"
 
-    await cb.message.edit_text(
+    await safe_edit_text(
+        cb.message,
         text,
         reply_markup=currency_keyboard(currencies, current_code=current_code, lang=lang)
     )
@@ -134,14 +136,18 @@ async def set_language(cb: types.CallbackQuery, state: FSMContext, lang: str | N
     lang_code = normalize_lang(parts[2])
 
     language_store.set(cb.from_user.id, lang_code)
+    sync_failed = False
     try:
         await telegram_set_language(cb.from_user.id, lang_code)
     except RPCTransportError:
         logging.exception("Set language failed")
+        sync_failed = True
 
     if context == "settings":
         text = render_settings_text(lang_code, currency_store.get(cb.from_user.id))
-        await cb.message.edit_text(text, reply_markup=settings_menu_keyboard(lang_code))
+        if sync_failed:
+            text += "\n\n" + t("language.sync_failed", lang_code)
+        await safe_edit_text(cb.message, text, reply_markup=settings_menu_keyboard(lang_code))
         await cb.answer()
         return
 
@@ -150,8 +156,13 @@ async def set_language(cb: types.CallbackQuery, state: FSMContext, lang: str | N
         await state.clear()
 
     # Default behavior for start flow
-    await cb.message.edit_text(
-        t("language.changed", lang_code, language=get_language_label(lang_code, lang_code)),
+    text = t("language.changed", lang_code, language=get_language_label(lang_code, lang_code))
+    if sync_failed:
+        text += "\n\n" + t("language.sync_failed", lang_code)
+
+    await safe_edit_text(
+        cb.message,
+        text,
         reply_markup=None,
     )
 
@@ -193,8 +204,10 @@ async def set_currency_handler(cb: types.CallbackQuery, lang: str | None = None,
         await cb.answer(t("settings.currency.update_failed", lang), show_alert=True)
         return
 
+    updated = normalize_currency(updated)
     currency_store.set(cb.from_user.id, updated)
-    await cb.message.edit_text(
+    await safe_edit_text(
+        cb.message,
         render_settings_text(lang, updated),
         reply_markup=settings_menu_keyboard(lang)
     )

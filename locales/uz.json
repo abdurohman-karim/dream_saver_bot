@@ -8,6 +8,8 @@
   "common.done": "Tayyor",
   "common.yes": "Ha",
   "common.no": "Yo'q",
+  "common.error.backend_unavailable": "⚠️ Xizmat vaqtincha mavjud emas. Birozdan keyin yana urinib ko'ring.",
+  "common.error.unexpected": "⚠️ Nimadir xato ketdi. Iltimos, yana urinib ko'ring.",
   "common.main_menu.title": "🏠 Asosiy menyu",
   "common.main_menu.subtitle": "Tezkor amallar va asosiy bo'limlar — pastda.",
 
@@ -17,6 +19,7 @@
   "language.options.en": "English",
   "language.recommended": "Tavsiya etiladi",
   "language.changed": "✅ Til tanlandi: {language}",
+  "language.sync_failed": "⚠️ Interfeys tili lokal o'zgartirildi, lekin server hali yangilanishni tasdiqlamadi. Keyinroq qayta urinib ko'ring.",
 
   "settings.title": "⚙️ <b>Sozlamalar</b>",
   "settings.subtitle": "Moslashtirish va boshqaruv",
@@ -121,6 +124,8 @@
   "smart.confirm.button": "✅ Smart Save-ni tasdiqlash",
   "smart.confirm.processing": "⏳ Smart Save bajarilmoqda…",
   "smart.confirm.error.retry": "⚠️ Smart Save-ni tasdiqlab bo'lmadi. Yana urinib ko'ring.",
+  "smart.confirm.expired": "⚠️ Smart Save ko'rinishi eskirdi. Smart Save-ni qayta oching.",
+  "smart.confirm.mismatch": "⚠️ Smart Save tasdiqlashdan oldin o'zgardi.\nKutilgan: <b>{expected_amount}</b>\nHozirgi: <b>{actual_amount}</b>\nKo'rinishni yangilang va yana tasdiqlang.",
   "smart.status.already_saved": "Smart Save bugun allaqachon ishlatilgan. Ertaga urinib ko'ring.",
   "smart.status.insufficient_balance": "Smart Save uchun balans yetarli emas.",
   "smart.status.goal_completed": "Maqsad allaqachon bajarilgan. Smart Save kerak emas.",
@@ -179,6 +184,7 @@
   "goals.menu.back_button": "⬅️ Orqaga",
   "goals.manage.list_error": "⚠️ Maqsadlarni yuklab bo'lmadi. Keyinroq urinib ko'ring.",
   "goals.manage.load_error": "⚠️ Maqsadni yuklab bo'lmadi. Keyinroq urinib ko'ring.",
+  "goals.manage.stale_goal": "⚠️ Bu maqsad endi mavjud emas. Maqsadlar ro'yxatini qayta oching.",
   "goals.manage.primary_updated": "⭐ Asosiy maqsad yangilandi",
   "goals.manage.deposit_prompt": "💸 <b>Maqsadni to'ldirish</b>\n\nSummani kiriting. Misol: <b>150000</b>.",
   "goals.manage.deposit_confirm_title": "🧾 <b>To'ldirishni tekshiring</b>",

@@ -41,16 +41,15 @@ class RegistrationMiddleware(BaseMiddleware):
         if self._is_allowed_event(event):
             return await handler(event, data)
 
-        if self.store.is_registered(user.id):
-            return await handler(event, data)
-
         try:
             status = await telegram_status(user.id)
-            if status.get("registered"):
-                self.store.set_registered(user.id, True)
+            is_registered = bool(status.get("registered"))
+            self.store.set_registered(user.id, is_registered)
+            if is_registered:
                 return await handler(event, data)
         except RPCTransportError:
-            pass
+            await self._notify_backend_unavailable(event, lang)
+            return None
 
         await self._prompt_registration(event, lang)
         return None
@@ -98,3 +97,11 @@ class RegistrationMiddleware(BaseMiddleware):
             await event.answer()
         elif isinstance(event, types.Message):
             await event.answer(text, reply_markup=keyboard)
+
+    async def _notify_backend_unavailable(self, event, lang: str | None = None):
+        text = t("common.error.backend_unavailable", lang)
+        if isinstance(event, types.CallbackQuery):
+            await event.answer(text, show_alert=True)
+            await event.message.answer(text)
+        elif isinstance(event, types.Message):
+            await event.answer(text)
