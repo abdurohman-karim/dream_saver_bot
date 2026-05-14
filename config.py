@@ -1,6 +1,6 @@
 import os
 
-BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", "http://localhost:5136/api").rstrip("/")
+BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", "https://lunex.my/api").rstrip("/")
 
 RPC_URL = f"{BACKEND_BASE_URL}/rpc"
 RPC_TOKEN = os.getenv("RPC_TOKEN", "RQd6Zubz64M36WGdyb3FYV3L16c57661cd787c58f")
